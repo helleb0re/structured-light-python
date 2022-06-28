@@ -78,13 +78,12 @@ def calculate_unwraped_phase(phase_l, phase_h, lamb_l, lamb_h):
     'Shapes of phase_l and phase_h must be equals'
 
     # Formula (95) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-    k = np.round(((lamb_l / lamb_h) * phase_l - phase_h) / (2 * np.pi)).astype(int)
+    k = np.round(((lamb_l / lamb_h) * phase_l - phase_h) / (2 * np.pi))
 
     # Formula (94) in https://doi.org/10.1016/j.optlaseng.2018.04.019
     unwrapped_phase = phase_h + 2 * np.pi * k
 
     return unwrapped_phase
-
 
 
 def load_image(path : str) -> np.array:
@@ -137,7 +136,6 @@ def calculate_phase_for_fppmeasurement(measurement : FPPMeasurement) -> tuple[li
 
         if i == 0:
             unwrapped_phases.append(phase)
-            next
         else:
             unwrapped_phase = calculate_unwraped_phase(unwrapped_phases[i-1], phases[i], 1 / frequencies[i-1], 1 / frequencies[i])
             unwrapped_phases.append(unwrapped_phase)

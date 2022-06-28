@@ -8,18 +8,23 @@ class Projector():
         self.height = height
         self.__min_image_brightness = min_brightness
         self.__max_image_brightness = max_brightness
+        self.window_exist = False
 
-    def project_patterns(self, patterns):
+    def set_up_window(self):
         cv2.namedWindow('projection', cv2.WND_PROP_FULLSCREEN)
         cv2.setWindowProperty('projection', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         cv2.moveWindow('projection', 1920, 0)
+        self.window_exist = True
 
-        for pattern in patterns:
-            pat = self.image_brightness_rescale_factor * (pattern + 1) + self.min_image_brightness
-            cv2.imshow('projection', pat.astype(np.uint8))
-            yield True
+    def project_pattern(self, pattern):
+        if not self.window_exist:
+            self.set_up_window()
+        pat = self.image_brightness_rescale_factor * (pattern + 1) + self.min_image_brightness
+        cv2.imshow('projection', pat.astype(np.uint8))
 
+    def close_window(self):
         cv2.destroyWindow('projection')
+        self.window_exist = False
 
     @property
     def resolution(self):

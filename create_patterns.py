@@ -30,7 +30,7 @@ def create_psp_templates(width, height, num_frequency_value, number=4, horizonta
 
     for i in range(num_frequency_value):
         frequencies.append(1 + 3 * i)
-        template, phase_shifts = create_psp_template(width, height, frequencies[i])
+        template, phase_shifts = create_psp_template(width, height, frequencies[i], number, horizontal)
         patterns_with_diff_freq.append(template)
 
     return patterns_with_diff_freq, phase_shifts, frequencies 

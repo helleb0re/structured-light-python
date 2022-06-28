@@ -17,6 +17,7 @@ from hand_set_up_camera import camera_adjust, camera_baumer_adjust
 from calibration_patterns import calibration_patterns
 from data_experiment import ExperimentSettings
 from fpp_structures import FPPMeasurement
+from processing import calculate_phase_for_fppmeasurement
 
 
 def detect_cameras(cam_type='web', amount=2):
@@ -50,7 +51,7 @@ def adjust_cameras(cameras):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def capture_measurement_images(cameras, projector, patterns):
+def capture_measurement_images(cameras, projector, time_delay):
 
     cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam1', 600, 400)
@@ -66,9 +67,16 @@ def capture_measurement_images(cameras, projector, patterns):
     os.makedirs(f'./data/{measure_name}/')
     os.makedirs(f'./data/{measure_name}/cam_1/')
     os.makedirs(f'./data/{measure_name}/cam_2/')
+    
+    projector.set_up_window()
 
-    for i, pattern in enumerate(patterns):
-        for j, _ in enumerate(projector.project_patterns(pattern)):
+    for i in range(len(patterns)):
+
+        fn_for_one_freq1 = []
+        fn_for_one_freq2 = []
+
+        for j in range(len(patterns[i])):
+            projector.project_pattern(patterns[i][j])
 
             if cameras[0].type == 'web':
                 _1 = cameras[0].get_image()
@@ -76,30 +84,38 @@ def capture_measurement_images(cameras, projector, patterns):
                 _2 = cameras[1].get_image()
 
             while True:
+                cv2.waitKey(time_delay)
+
                 frame_1 = cameras[0].get_image()
                 frame_2 = cameras[1].get_image()
                 if cameras[0].type == 'web':
                     frame_1 = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
                 if cameras[1].type == 'web':
                     frame_2 = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
-                k = cv2.waitKey(1)
-                cv2.imshow('cam1', frame_1)
-                cv2.imshow('cam2', frame_2)
-                if k == 27:
-                    filename1 = f'./data/{measure_name}/cam_1/frame_{i}_{j}.png'
-                    filename2 = f'./data/{measure_name}/cam_2/frame_{i}_{j}.png'
-                    saved1 = cv2.imwrite(filename1, frame_1)
-                    saved2 = cv2.imwrite(filename2, frame_2)
+                # k = cv2.waitKey(1)
+                # cv2.imshow('cam1', frame_1)
+                # cv2.imshow('cam2', frame_2)
+                # if k == 27:
+                filename1 = f'./data/{measure_name}/cam_1/frame_{i}_{j}.png'
+                filename2 = f'./data/{measure_name}/cam_2/frame_{i}_{j}.png'
+                saved1 = cv2.imwrite(filename1, frame_1)
+                saved2 = cv2.imwrite(filename2, frame_2)
 
-                    if saved1 and saved2:
-                        filenames1.append(filename1)
-                        filenames2.append(filename2)
-                    else:
-                        raise Exception('Error during image saving!')
+                if saved1 and saved2:
+                    fn_for_one_freq1.append(filename1)
+                    fn_for_one_freq2.append(filename2)
+                    # else:
+                    #     raise Exception('Error during image saving!')
                     break
+
+        filenames1.append(fn_for_one_freq1)
+        filenames2.append(fn_for_one_freq2)
+    
+    projector.close_window()
 
     cv2.destroyWindow('cam1')
     cv2.destroyWindow('cam2')
+
 
     meas1 = FPPMeasurement(
         frequencies, phase_shifts, filenames1
@@ -109,7 +125,7 @@ def capture_measurement_images(cameras, projector, patterns):
     )
 
     with open(f"./data/{measure_name}/measure_{measure_name}.json", "x") as f:
-                json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
+        json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
 
     return meas1, meas2
 
@@ -173,8 +189,6 @@ def define_ROI(cameras, projector):
         cv2.destroyWindow('cam')
 
 if __name__ == '__main__':
-    
-    patterns = []
 
     with open("config.json") as f:
         data = json.load(f)
@@ -186,7 +200,7 @@ if __name__ == '__main__':
 
     cameras = detect_cameras(cam_type='baumer', amount=2)
 
-    choices = {i for i in range(5)}
+    choices = {i for i in range(6)}
 
     while True:
         print(f"Подключено {len(cameras)} камер")
@@ -218,7 +232,31 @@ if __name__ == '__main__':
             calibration_patterns(test_pattern, cameras, projector)
 
         elif (choice == 4):
-            meas1, meas2 = capture_measurement_images(cameras, projector, patterns)
+            time_delay = int(data['capture_parameters']['delay'])
+            measurements = capture_measurement_images(cameras, projector, time_delay)
+            w_phases_1, uw_phases_1 = calculate_phase_for_fppmeasurement(measurements[0])
+            w_phases_2, uw_phases_2 = calculate_phase_for_fppmeasurement(measurements[1])
+
+            for w_phase_1, uw_phase_1, w_phase_2, uw_phase_2 in zip(
+                w_phases_1, uw_phases_1, w_phases_2, uw_phases_2):
+                plt.subplot(221)
+                plt.imshow(w_phase_1, cmap="gray")
+                plt.colorbar()
+
+                plt.subplot(222)
+                plt.imshow(uw_phase_1, cmap="gray")
+                plt.colorbar()
+
+                plt.subplot(223)
+                plt.imshow(w_phase_2, cmap="gray")
+                plt.colorbar()
+
+                plt.subplot(224)
+                plt.imshow(uw_phase_2, cmap="gray")
+                plt.colorbar()
+
+                plt.show()
+
         # except:
         #     print("Введите одно из представленных значений на выбор.")
         #     continue

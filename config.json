@@ -2,21 +2,24 @@
     "projector": {
         "width": 1280,
         "height": 720,
-        "min_brightness": 15,
-        "max_brightness": 230
+        "min_brightness": 11,
+        "max_brightness": 177
     },
     "cameras": {
         "baumer": [
             {
-                "exposure": 5000,
+                "exposure": 21500,
                 "gamma": 0.5,
                 "gain": 1.0
             },
             {
-                "exposure": 5000,
+                "exposure": 21500,
                 "gamma": 0.5,
                 "gain": 1.0
             }
         ]
+    },
+    "capture_parameters": {
+        "delay": 300
     }
 }
