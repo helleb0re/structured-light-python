@@ -1,0 +1,18 @@
+# Default ignored files
+/shelf/
+/workspace.xml
+# Editor-based HTTP Client requests
+/httpRequests/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+.idea/
+data/
+
+.vscode/
+__pycache__/
+calibrate_images/
+calibrate_images - Copy/
+calibrated_data.json
+
+cameras_helper
