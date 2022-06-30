@@ -22,6 +22,7 @@ import cv2
 
 def calibration_patterns(patterns, cameras, projector):
     end = False
+    pattern_num = 0
 
     def quit(root):
         nonlocal end
@@ -32,6 +33,13 @@ def calibration_patterns(patterns, cameras, projector):
 
     root = Tk.Tk()
     root.wm_title("Embedding in TK")
+
+    # Callback function to show next pattern
+    def next_pattern(root):
+        nonlocal pattern_num
+        pattern_num = pattern_num + 1
+        if pattern_num == len(patterns):
+            pattern_num = 0
 
     f = Figure(figsize=(5, 4), dpi=100)
 
@@ -45,6 +53,8 @@ def calibration_patterns(patterns, cameras, projector):
     canvas._tkcanvas.pack(side=Tk.TOP, fill=Tk.BOTH, expand=1)
 
     button = Tk.Button(master=root, text='Quit', command=lambda: quit(root))
+    button.pack(side=Tk.BOTTOM)
+    button = Tk.Button(master=root, text='Next', command=lambda: next_pattern(root))
     button.pack(side=Tk.BOTTOM)
 
     def slider_max_changed(event):
@@ -74,46 +84,52 @@ def calibration_patterns(patterns, cameras, projector):
     label_2.pack(side=Tk.TOP)
     scale_min.pack(side=Tk.TOP)
 
+    projector.set_up_window()
+
     while True:
-        response = next(projector.project_patterns(patterns))
-        # for _ in projector.projection(new_pattern.astype(np.uint8)):
-        if response:
-            
-            if cameras[0].type == 'web':
-                _1 = cameras[0].get_image()
-            if cameras[1].type == 'web':
-                _2 = cameras[1].get_image()
-            
-            frame_1 = cameras[0].get_image()
-            frame_2 = cameras[1].get_image()
+        projector.project_pattern(patterns[pattern_num][0])
+        
+        if cameras[0].type == 'web':
+            _1 = cameras[0].get_image()
+        if cameras[1].type == 'web':
+            _2 = cameras[1].get_image()
+        
+        frame_1 = cameras[0].get_image()
+        frame_2 = cameras[1].get_image()
 
-            if cameras[0].type == 'web':
-                frame_1 = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
-            if cameras[1].type == 'web':
-                frame_2 = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
-            
-            m, n, _ = frame_1.shape
-            a1 = f.add_subplot(221)
-            a1.plot(range(n), frame_1[520, :])
-            b1 = f.add_subplot(222)
-            b1.imshow(frame_1)
+        if cameras[0].type == 'web':
+            frame_1 = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
+        if cameras[1].type == 'web':
+            frame_2 = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
+        
+        m, n, _ = frame_1.shape
+        a1 = f.add_subplot(221)
+        a1.plot(range(n), frame_1[520, :])
+        b1 = f.add_subplot(222)
+        b1.imshow(frame_1)
 
-            a2 = f.add_subplot(223)
-            a2.plot(range(n), frame_2[520, :])
-            b2 = f.add_subplot(224)
-            b2.imshow(frame_2)
-            root.update()
-            if (end):
-                with open('config.json') as f:
-                    data = json.load(f)
-                data['projector']["min_brightness"] = projector.min_image_brightness
-                data['projector']["max_brightness"] = projector.max_image_brightness
-                with open('config.json', 'w') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=4)
-                cv2.destroyAllWindows()
-                break
-            canvas.draw()
-            f.delaxes(a1)
-            f.delaxes(b1)
-            f.delaxes(a2)
-            f.delaxes(b2)
+        a2 = f.add_subplot(223)
+        a2.plot(range(n), frame_2[520, :])
+        b2 = f.add_subplot(224)
+        b2.imshow(frame_2)
+        root.update()
+
+        if (end):
+            # Save results of calibration
+            with open('config.json') as f:
+                data = json.load(f)
+
+            data['projector']["min_brightness"] = projector.min_image_brightness
+            data['projector']["max_brightness"] = projector.max_image_brightness
+
+            with open('config.json', 'w') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            
+            projector.close_window()
+
+            break
+        canvas.draw()
+        f.delaxes(a1)
+        f.delaxes(b1)
+        f.delaxes(a2)
+        f.delaxes(b2)

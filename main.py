@@ -130,63 +130,52 @@ def capture_measurement_images(cameras, projector, time_delay):
     return meas1, meas2
 
 def define_ROI(cameras, projector):
+
+    projector.set_up_window()
+    
+    white_screen = np.ones(projector.resolution)
+
     cv2.namedWindow('cam', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam', 600, 400)
 
     # background photos
     background_photos = []
     for cam in cameras:
-        gray = cv2.cvtColor(cam.get_image(), cv2.COLOR_BGR2GRAY)
+        k = 0
+        while k != 27:
+            #__ = cam.get_image()
+            gray = cam.get_image()
+            if gray.shape[2] > 1:
+                gray = cv2.cvtColor(cam.get_image(), cv2.COLOR_BGR2GRAY)
+            cv2.imshow("cam", gray)
+            k = cv2.waitKey(100)
         background_photos.append(gray)
     
     # define measuring area
-    photos_with_patterns = []
-    test_pattern = create_psp_template(1920, 1080, 200, 1)
-    for _ in projector.project_patterns(test_pattern):
-        for cam in cameras:
-            cv2.waitKey()
-            __ = cam.get_image()
-            gray = cv2.cvtColor(cam.get_image(), cv2.COLOR_BGR2GRAY)
+    whiteround_photos = []
+
+    projector.project_pattern(white_screen)
+
+    for cam in cameras:
+        k = 0
+        while k != 27:
+            #__ = cam.get_image()
+            gray = cam.get_image()
+            if gray.shape[2] > 1:
+                gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
             cv2.imshow("cam", gray)
-            cv2.waitKey()
-            photos_with_patterns.append(gray)
+            k = cv2.waitKey(100)
+        whiteround_photos.append(gray)
 
-    # measuring_area = [[] for _ in range(len(cameras))]
-    # for i in range(len(patterns2)):
-    #     for j in range(len(cameras)):
-    #         # binarization mb
-    #         measuring_area[j].append(high_fringe_photos[j][i] - background_photos[j])
-    #         cv2.imwrite('./data/res/cam_{}/{}_{}.png'.format(j+1, 'measuring_area', i), measuring_area[j][i])
-    for i, (bg_photo, fringe_photo) in enumerate(zip(background_photos, test_pattern)):
-        tmp = fringe_photo - bg_photo
-        cv2.waitKey()
-        # тут пока лишь ручное добавление
-        if (i == 0):
-            roi = ROI(1920, 1080)
-            roi.corners[0].x = 442
-            roi.corners[1].x = 1347
-            roi.corners[2].x = 1365
-            roi.corners[3].x = 436
+    projector.close_window()
 
-            roi.corners[0].x = 263
-            roi.corners[1].x = 97
-            roi.corners[2].x = 785
-            roi.corners[3].x = 764
-            ExperimentSettings.add_ROI_values(roi)
-        elif (i == 1):
-            roi = ROI(1920, 1080)
-            roi.corners[0].x = 497
-            roi.corners[1].x = 1505
-            roi.corners[2].x = 1545
-            roi.corners[3].x = 514
-
-            roi.corners[0].x = 145
-            roi.corners[1].x = 185
-            roi.corners[2].x = 726
-            roi.corners[3].x = 787
-            ExperimentSettings.add_ROI_values(roi)
+    # i = 0
+    # for photo1, photo2 in zip(background_photos, whiteround_photos):
+    #     cv2.imwrite(f'./data/background_{i}.png', photo1)
+    #     cv2.imwrite(f'./data/whiteground_{i}.png', photo2)
+    #     i = i + 1
     
-        cv2.destroyWindow('cam')
+    cv2.destroyWindow('cam')
 
 if __name__ == '__main__':
 
@@ -228,7 +217,7 @@ if __name__ == '__main__':
             define_ROI(cameras, projector)
 
         elif (choice == 3):
-            test_pattern, _ = create_psp_template(1920, 1080, 10, 1)
+            test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
             calibration_patterns(test_pattern, cameras, projector)
 
         elif (choice == 4):
