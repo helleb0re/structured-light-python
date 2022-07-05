@@ -1,7 +1,6 @@
-from __future__ import annotations
-
-
 '''Module to process FPP images'''
+
+from __future__ import annotations
 
 from typing import Optional
 
@@ -13,14 +12,17 @@ from create_patterns import *
 from fpp_structures import FPPMeasurement 
 
 
-def calculate_phase_generic(images : list, phase_shifts : Optional[list]=None, frequency : Optional[float]=None) -> tuple[np.array, np.array, np.array] :
+def calculate_phase_generic(images : list[np.array], phase_shifts : Optional[list[float]]=None, frequency : Optional[float]=None) -> tuple[np.array, np.array, np.array] :
     '''
     Calculate wrapped phase from several PSP images by 
     generic formula (8) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+
     Args:
         images (list): The list of PSP images
         phase_shifts=None (list): The list of phase shifts for each image from images,
         if phase_shifts is not defined, its calculated automatical for uniform step
+        frequency=None (float): The frequency of measurement to add PI for unity frequency images 
+
     Returns:
         result_phase (2D numpy array): wrapped phase from images
         average_intensity (2D numpy array): average intensity on images
@@ -40,37 +42,62 @@ def calculate_phase_generic(images : list, phase_shifts : Optional[list]=None, f
     for i in range(len(images)):
         imgs[i] = images[i]
 
-    # Reshape phase shifts for broadcasting multiplying
-    phase_shifts = np.array(phase_shifts).reshape((-1,) + (1, 1))
+    # Use specific case for phase shifts length
+    if len(phase_shifts) == 3:
+        # Calculate formula (14-16) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+        sum0 = np.sum(imgs[0])
+        sum1 = np.sum(imgs[1])
+        sum2 = np.sum(imgs[2])
+        sum12 = sum1 - sum2
+        sum012 = 2 * sum0 - sum1 - sum2
+        result_phase = np.arctan2(np.sqrt(3) * (sum12), sum012)
+        average_intensity = (sum0, sum1, sum2) / 3
+        modulated_intensity = 1/3 * np.sqrt(3*(sum12)**2 + (sum012)**2)
+    elif len(phase_shifts) == 4:
+        # Calculate formula (21-23) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+        sum0 = np.sum(imgs[0])
+        sum1 = np.sum(imgs[1])
+        sum2 = np.sum(imgs[2])
+        sum3 = np.sum(imgs[3])
+        sum13 = sum1 - sum3
+        sum02 = sum0 - sum2
+        result_phase = np.arctan2(sum13, sum02)
+        average_intensity = (sum0 + sum1 + sum2 + sum3) / 4
+        modulated_intensity = 0.5 * np.sqrt(sum13**2 + sum02**2)
+    else:
+        # Reshape phase shifts for broadcasting multiplying
+        phase_shifts = np.array(phase_shifts).reshape((-1,) + (1, 1))
 
-    # Add suplementary phase to get phase for unity frequency measurment
-    phase_sup = 0
-    if frequency is not None and frequency == 1:
-        phase_sup = np.pi
+        # Add suplementary phase to get phase for unity frequency measurment
+        phase_sup = 0
+        if frequency is not None and frequency == 1:
+            phase_sup = np.pi
 
-    # Calculate formula (8) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-    temp1 = np.multiply(imgs, np.sin(phase_shifts + phase_sup))
-    temp2 = np.multiply(imgs, np.cos(phase_shifts + phase_sup))
+        # Calculate formula (8) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+        temp1 = np.multiply(imgs, np.sin(phase_shifts + phase_sup))
+        temp2 = np.multiply(imgs, np.cos(phase_shifts + phase_sup))
 
-    result_phase = np.arctan2(np.sum(temp1, 0), np.sum(temp2, 0))
+        result_phase = np.arctan2(np.sum(temp1, 0), np.sum(temp2, 0))
 
-    # Calculate formula (9-10) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-    average_intensity = np.mean(imgs, 0) / len(images)
-    modulated_intensity = 2 * np.sqrt(np.power(np.sum(temp1, 0), 2) + np.power(np.sum(temp2, 0), 2)) / len(images)
+        # Calculate formula (9-10) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+        average_intensity = np.mean(imgs, 0) / len(images)
+        modulated_intensity = 2 * np.sqrt(np.power(np.sum(temp1, 0), 2) + np.power(np.sum(temp2, 0), 2)) / len(images)
 
     return result_phase, average_intensity, modulated_intensity
 
 
-def calculate_unwraped_phase(phase_l, phase_h, lamb_l, lamb_h):
+def calculate_unwraped_phase(phase_l : np.array, phase_h : np.array, lamb_l :float , lamb_h : float) -> np.array:
     '''
     Calculate unwrapped phase from two sets of PSP images by 
     formula (94-95) in https://doi.org/10.1016/j.optlaseng.2018.04.019
     with standard temporal phase unwrapping (TPU) algorithm
+
     Args:
         phase_l (2D numpy array): The calculated phase for set of PSP images with low frequency (lamb_l) 
         phase_h (2D numpy array): The calculated phase for set of PSP images with high frequency (lamb_h) 
-        lamb_l (int): The low spatial frequency for first phase array (phase_l)
-        lamb_h (int): The high spatial frequency for second phase array (phase_h)
+        lamb_l (float): The low spatial frequency for first phase array (phase_l)
+        lamb_h (float): The high spatial frequency for second phase array (phase_h)
+
     Returns:
         unwrapped_phase (2D numpy array): unwrapped phase
     '''
@@ -78,12 +105,13 @@ def calculate_unwraped_phase(phase_l, phase_h, lamb_l, lamb_h):
     'Shapes of phase_l and phase_h must be equals'
 
     # Formula (95) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-    k = np.round(((lamb_l / lamb_h) * phase_l - phase_h) / (2 * np.pi))
+    k = np.round(((lamb_l / lamb_h) * phase_l - phase_h) / (2 * np.pi)).astype(int)
 
     # Formula (94) in https://doi.org/10.1016/j.optlaseng.2018.04.019
     unwrapped_phase = phase_h + 2 * np.pi * k
 
     return unwrapped_phase
+
 
 
 def load_image(path : str) -> np.array:
@@ -92,6 +120,7 @@ def load_image(path : str) -> np.array:
     
     Args:
         path (string): path to file for loading
+
     Returns:
         image (2D numpy array): loaded image
     '''
@@ -108,8 +137,10 @@ def calculate_phase_for_fppmeasurement(measurement : FPPMeasurement) -> tuple[li
     '''
     Calculate unwrapped phase for FPP measurement instance with the help
     of calculate_phase_generic and calculate_unwraped_phase functions    
+
     Args:
         measurement (FPPMeasurement): FPP measurement instance
+
     Returns:
         phases (List of 2D numpy array): wrapped phases
         unwrapped_phases (List of 2D numpy array): unwrapped phase
