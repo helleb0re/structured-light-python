@@ -1,7 +1,9 @@
 '''Module to store FPP data structures'''
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import numpy as np
+from typing import Optional
 
 
 @dataclass
@@ -10,7 +12,8 @@ class FPPMeasurement:
     frequencies : list[float]
     shifts : list[float]
     imgs_file_names : list[list[str]]
-      
+    imgs_list: Optional[list[list[np.array]]] = None
+
     @property
     def frequency_counts(self) -> int :
         return len(self.frequencies)

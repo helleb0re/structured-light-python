@@ -8,12 +8,12 @@
     "cameras": {
         "baumer": [
             {
-                "exposure": 21500,
-                "gamma": 0.5,
-                "gain": 1.0
+                "exposure": 4850,
+                "gamma": 0.49,
+                "gain": 0.98
             },
             {
-                "exposure": 21500,
+                "exposure": 5000,
                 "gamma": 0.5,
                 "gain": 1.0
             }

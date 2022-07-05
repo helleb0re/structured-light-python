@@ -23,11 +23,11 @@ class CameraWeb(Camera):
     def focus(self, x):  
         self.camera.set(cv2.CAP_PROP_FOCUS, x)
 
-    @property 
+    @property
     def exposure(self):  
         return self.camera.get(cv2.CAP_PROP_EXPOSURE)
         
-    @exposure.setter  
+    @exposure.setter
     def exposure(self, x):  
         self.camera.set(cv2.CAP_PROP_EXPOSURE, x)
 

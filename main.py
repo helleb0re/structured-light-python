@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime
+import neoapi
 
 import cv2
 import neoapi
@@ -20,14 +21,32 @@ from fpp_structures import FPPMeasurement
 from processing import calculate_phase_for_fppmeasurement
 
 
-def detect_cameras(cam_type='web', amount=2):
+def initialize_cameras(cam_type='web', amount=2):
     '''
     Detect connected cameras
     '''
     if cam_type == 'web':
         return [CameraWeb(number=i) for i in range(amount)]
     elif cam_type == 'baumer':
-        return [CameraBaumer(neoapi.Cam()) for i in range(amount)]
+        cameras = []
+        for i in range(amount):
+            camera = CameraBaumer(neoapi.Cam())
+            camera.line_selector = neoapi.LineSelector_Line1
+
+            if i == 0 and amount > 1:
+                camera.frame_rate_enable = True
+                camera.frame_rate = 25.0
+                camera.line_mode = neoapi.LineMode_Output
+                camera.line_source = neoapi.LineSource_ExposureActive
+            
+            if i != 0 and amount > 1:
+                camera.trigger_mode = neoapi.TriggerMode_On
+                camera.line_mode = neoapi.LineMode_Input
+            
+            camera.exposure = 20000
+            cameras.append(camera)
+
+        return cameras
 
 
 def adjust_cameras(cameras):
@@ -46,34 +65,41 @@ def adjust_cameras(cameras):
             data["cameras"]["baumer"][i]["exposure"] = exposure
             data["cameras"]["baumer"][i]["gamma"] = gamma
             data["cameras"]["baumer"][i]["gain"] = gain
-    
+
     with open("config.json", "w") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def capture_measurement_images(cameras, projector, time_delay):
+def capture_measurement_images(cameras, projector, time_delay, save_meas_params = False):
 
     cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam1', 600, 400)
     cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam2', 600, 400)
-  
+
     patterns, phase_shifts, frequencies = create_psp_templates(1920, 1080, 7)
 
-    filenames1 = []
-    filenames2 = []
+    images1 = []
+    images2 = []
 
-    measure_name = f'{datetime.now():%d-%m-%Y_%H-%M-%S}'
-    os.makedirs(f'./data/{measure_name}/')
-    os.makedirs(f'./data/{measure_name}/cam_1/')
-    os.makedirs(f'./data/{measure_name}/cam_2/')
-    
+    if save_meas_params:
+        filenames1 = []
+        filenames2 = []
+        measure_name = f'{datetime.now():%d-%m-%Y_%H-%M-%S}'
+        os.makedirs(f'./data/{measure_name}/')
+        os.makedirs(f'./data/{measure_name}/cam_1/')
+        os.makedirs(f'./data/{measure_name}/cam_2/')
+
     projector.set_up_window()
 
     for i in range(len(patterns)):
 
-        fn_for_one_freq1 = []
-        fn_for_one_freq2 = []
+        if save_meas_params:
+            fn_for_one_freq1 = []
+            fn_for_one_freq2 = []
+
+        img_for_one_freq1 = []
+        img_for_one_freq2 = []
 
         for j in range(len(patterns[i])):
             projector.project_pattern(patterns[i][j])
@@ -88,44 +114,45 @@ def capture_measurement_images(cameras, projector, time_delay):
 
                 frame_1 = cameras[0].get_image()
                 frame_2 = cameras[1].get_image()
-                if cameras[0].type == 'web':
-                    frame_1 = cv2.cvtColor(frame_1, cv2.COLOR_BGR2GRAY)
-                if cameras[1].type == 'web':
-                    frame_2 = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
-                # k = cv2.waitKey(1)
-                # cv2.imshow('cam1', frame_1)
-                # cv2.imshow('cam2', frame_2)
-                # if k == 27:
-                filename1 = f'./data/{measure_name}/cam_1/frame_{i}_{j}.png'
-                filename2 = f'./data/{measure_name}/cam_2/frame_{i}_{j}.png'
-                saved1 = cv2.imwrite(filename1, frame_1)
-                saved2 = cv2.imwrite(filename2, frame_2)
 
-                if saved1 and saved2:
-                    fn_for_one_freq1.append(filename1)
-                    fn_for_one_freq2.append(filename2)
+                if save_meas_params:
+                    filename1 = f'./data/{measure_name}/cam_1/frame_{i}_{j}.png'
+                    filename2 = f'./data/{measure_name}/cam_2/frame_{i}_{j}.png'
+                    saved1 = cv2.imwrite(filename1, frame_1)
+                    saved2 = cv2.imwrite(filename2, frame_2)
+
+                    if saved1 and saved2:
+                        fn_for_one_freq1.append(filename1)
+                        fn_for_one_freq2.append(filename2)
+
+                img_for_one_freq1.append(frame_1)
+                img_for_one_freq2.append(frame_2)
                     # else:
                     #     raise Exception('Error during image saving!')
-                    break
+                break
 
-        filenames1.append(fn_for_one_freq1)
-        filenames2.append(fn_for_one_freq2)
+            if save_meas_params:
+                filenames1.append(fn_for_one_freq1)
+                filenames2.append(fn_for_one_freq2)
+
+        images1.append(img_for_one_freq1)
+        images2.append(img_for_one_freq2)
     
     projector.close_window()
 
     cv2.destroyWindow('cam1')
     cv2.destroyWindow('cam2')
 
-
     meas1 = FPPMeasurement(
-        frequencies, phase_shifts, filenames1
+        frequencies, phase_shifts, filename1 if save_meas_params else [], images1
     )
     meas2 = FPPMeasurement(
-        frequencies, phase_shifts, filenames2
+        frequencies, phase_shifts, filename2 if save_meas_params else [], images2
     )
 
-    with open(f"./data/{measure_name}/measure_{measure_name}.json", "x") as f:
-        json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
+    if save_meas_params:
+        with open(f"./data/{measure_name}/measure_{measure_name}.json", "x") as f:
+            json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
 
     return meas1, meas2
 
@@ -187,7 +214,7 @@ if __name__ == '__main__':
         int(data["projector"]["min_brightness"]),
         int(data["projector"]["max_brightness"]))
 
-    cameras = detect_cameras(cam_type='baumer', amount=2)
+    cameras = initialize_cameras(cam_type='baumer', amount=2)
 
     choices = {i for i in range(6)}
 

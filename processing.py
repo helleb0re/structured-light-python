@@ -7,7 +7,7 @@ from typing import Optional
 
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
+from matplotlib import image, pyplot as plt
 
 from create_patterns import *
 from fpp_structures import FPPMeasurement 
@@ -119,6 +119,7 @@ def calculate_phase_for_fppmeasurement(measurement : FPPMeasurement) -> tuple[li
     shifts_count = measurement.shifts_count
     frequencies = measurement.frequencies
     frequency_counts = measurement.frequency_counts
+    images = measurement.imgs_list
 
     phases = []
     unwrapped_phases = []
@@ -126,10 +127,13 @@ def calculate_phase_for_fppmeasurement(measurement : FPPMeasurement) -> tuple[li
     for i in range(frequency_counts):
 
         images_for_one_frequency = []
-        
-        for j in range(shifts_count):
-            im = load_image(measurement.imgs_file_names[i][j])
-            images_for_one_frequency.append(im)
+
+        if images is None:
+            for j in range(shifts_count):
+                im = load_image(measurement.imgs_file_names[i][j])
+                images_for_one_frequency.append(im)
+        else:
+            images_for_one_frequency = images[i]
 
         phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, measurement.shifts, measurement.frequencies[i])
         phases.append(phase)
