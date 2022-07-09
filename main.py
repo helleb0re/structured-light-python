@@ -1,16 +1,14 @@
 import os
 import json
 from datetime import datetime
-import neoapi
 
 import cv2
-import neoapi
 import numpy as np
 from matplotlib import pyplot as plt
 
-from ROI import ROI
 from camera_baumer import CameraBaumer
 
+from camera import Camera
 from camera_web import CameraWeb
 from projector import Projector
 from create_patterns import create_psp_template, create_psp_templates
@@ -21,35 +19,19 @@ from fpp_structures import FPPMeasurement
 from processing import calculate_phase_for_fppmeasurement
 
 
-def initialize_cameras(cam_type='web', amount=2):
+def initialize_cameras(cam_type: str='web', cam_to_found_number: int=2) -> list[Camera]:
     '''
     Detect connected cameras
     '''
     if cam_type == 'web':
-        return [CameraWeb(number=i) for i in range(amount)]
+        cameras = CameraWeb.get_available_cameras(cam_to_found_number)
     elif cam_type == 'baumer':
-        cameras = []
-        for i in range(amount):
-            camera = CameraBaumer(neoapi.Cam())
-            camera.line_selector = neoapi.LineSelector_Line1
-
-            if i == 0 and amount > 1:
-                camera.frame_rate_enable = True
-                camera.frame_rate = 25.0
-                camera.line_mode = neoapi.LineMode_Output
-                camera.line_source = neoapi.LineSource_ExposureActive
-            
-            if i != 0 and amount > 1:
-                camera.trigger_mode = neoapi.TriggerMode_On
-                camera.line_mode = neoapi.LineMode_Input
-            
-            camera.exposure = 20000
-            cameras.append(camera)
-
-        return cameras
+        cameras = CameraBaumer.get_available_cameras(cam_to_found_number)
+        
+    return cameras
 
 
-def adjust_cameras(cameras):
+def adjust_cameras(cameras: list[Camera]) -> None:
     '''
     Adjust camera capture parameters (focus length, exposure time, etc)
     with visual control
@@ -70,7 +52,39 @@ def adjust_cameras(cameras):
         json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-def capture_measurement_images(cameras, projector, time_delay, save_meas_params = False):
+def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
+    '''
+    Сalibrate projector image with gamma correction
+    '''
+    win_size_x = 50
+    win_size_y = 50
+
+    projector.set_up_window()
+    
+    brightness_vs_intensity = []
+
+    image = np.zeros((projector.height, projector.width))
+    
+    for intensity in range(256):
+        image[:,:] = intensity
+        projector.project_pattern(image)
+
+        img1 = cameras[0].get_image()
+        # img2 = cameras[1].get_image()
+
+        brightness = np.mean(img1[img1.shape[0]/2 - win_size_x:img1.shape[0]/2 + win_size_x, img1.shape[1]/2 - win_size_y:img1.shape[1]/2 + win_size_y])
+
+        brightness_vs_intensity.append(brightness)
+
+    projector.close_window()
+
+    plt.plot(brightness_vs_intensity)
+    plt.show()
+
+    # TODO: calculate gamma coeficient and store it in Projector instance
+
+
+def capture_measurement_images(cameras: list[Camera], projector: Projector, time_delay: float, save_meas_params: bool = False) -> tuple[FPPMeasurement, FPPMeasurement]:
 
     cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam1', 600, 400)
@@ -156,7 +170,7 @@ def capture_measurement_images(cameras, projector, time_delay, save_meas_params 
 
     return meas1, meas2
 
-def define_ROI(cameras, projector):
+def define_ROI(cameras: list[Camera], projector: Projector) -> None:
 
     projector.set_up_window()
     
@@ -204,6 +218,7 @@ def define_ROI(cameras, projector):
     
     cv2.destroyWindow('cam')
 
+
 if __name__ == '__main__':
 
     with open("config.json") as f:
@@ -214,7 +229,7 @@ if __name__ == '__main__':
         int(data["projector"]["min_brightness"]),
         int(data["projector"]["max_brightness"]))
 
-    cameras = initialize_cameras(cam_type='baumer', amount=2)
+    cameras = initialize_cameras(cam_type='baumer', cam_to_found_number=2)
 
     choices = {i for i in range(6)}
 
@@ -244,8 +259,9 @@ if __name__ == '__main__':
             define_ROI(cameras, projector)
 
         elif (choice == 3):
-            test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
-            calibration_patterns(test_pattern, cameras, projector)
+            # test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
+            # calibration_patterns(test_pattern, cameras, projector)
+            calibrate_projector(cameras, projector)
 
         elif (choice == 4):
             time_delay = int(data['capture_parameters']['delay'])

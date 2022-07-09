@@ -1,15 +1,55 @@
 from __future__ import annotations
 
-import neoapi
+import numpy as np
+
+try:    
+    import neoapi
+except ImportError:
+    neoapi_found = False
+else:
+    neoapi_found = True
 
 from camera import Camera
 
+
 class CameraBaumer(Camera):
-    def __init__(self, camera : neoapi.Cam) -> None:
+    def __init__(self, camera : neoapi.Cam):
         self.camera = camera
         self.camera.Connect()
         self.type = 'baumer'
         # print(f'Camera {camera.f.DeviceModelName.value} {camera.f.DeviceSerialNumber.value}')
+
+    @staticmethod
+    def get_available_cameras(cameras_num_to_find:int=2) -> list[Camera]:
+        cameras = []
+        
+        if neoapi_found:
+            for i in range(cameras_num_to_find):
+                camera = CameraBaumer(neoapi.Cam())
+
+                # Set default cameras parameters
+                camera.exposure = 20000
+                camera.frame_rate_enable = True
+                camera.frame_rate = 25.0
+                camera.gamma = 1.0
+
+                # Set first camera as master for triggering
+                if i == 0:
+                    camera.line_selector = neoapi.LineSelector_Line1
+                    camera.line_mode = neoapi.LineMode_Output
+                    camera.line_source = neoapi.LineSource_ExposureActive
+                
+                # Set next camera as slave for trigger wait
+                if i != 0:
+                    camera.trigger_mode = neoapi.TriggerMode_On
+                
+                cameras.append(camera)
+
+        return cameras
+
+    def get_image(self) -> np.array:
+        img = self.camera.GetImage().GetNPArray()
+        return img.reshape(img.shape[0], img.shape[1])
 
     @property
     def exposure(self):
@@ -90,7 +130,3 @@ class CameraBaumer(Camera):
     @frame_rate.setter
     def frame_rate(self, x):
         self.camera.f.AcquisitionFrameRate.value = x
-
-    def get_image(self):
-        img = self.camera.GetImage().GetNPArray()
-        return img.reshape(img.shape[0], img.shape[1])
