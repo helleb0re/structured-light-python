@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-
+import config
 from camera import Camera
 from projector import Projector
 from camera_web import CameraWeb
@@ -40,20 +40,16 @@ def adjust_cameras(cameras: list[Camera]) -> None:
     Adjust camera capture parameters (focus length, exposure time, etc)
     with visual control
     '''
-    with open("config.json") as f:
-        data = json.load(f)
-
     for i, camera in enumerate(cameras):
         if camera.type == 'web':
             camera_adjust(camera)
         elif camera.type == 'baumer':
             exposure, gamma, gain = camera_baumer_adjust(camera)
-            data["cameras"]["baumer"][i]["exposure"] = exposure
-            data["cameras"]["baumer"][i]["gamma"] = gamma
-            data["cameras"]["baumer"][i]["gain"] = gain
-
-    with open("config.json", "w") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+            config.CAMERA_EXPOSURE[i] = exposure
+            config.CAMERA_GAIN[i] = gain
+            config.CAMERA_GAMMA[i] = gamma
+    # Save calibration data to file
+    config.save_calibration_data()
 
 
 def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
@@ -104,9 +100,9 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
         filenames1 = []
         filenames2 = []
         measure_name = f'{datetime.now():%d-%m-%Y_%H-%M-%S}'
-        os.makedirs(f'./data/{measure_name}/')
-        os.makedirs(f'./data/{measure_name}/cam_1/')
-        os.makedirs(f'./data/{measure_name}/cam_2/')
+        os.makedirs(f'{config.DATA_PATH}/{measure_name}/')
+        os.makedirs(f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/')
+        os.makedirs(f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/')
 
     projector.set_up_window()
 
@@ -134,8 +130,8 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
                 frame_2 = cameras[1].get_image()
 
                 if save_meas_params:
-                    filename1 = f'./data/{measure_name}/cam_1/frame_{i}_{j}.png'
-                    filename2 = f'./data/{measure_name}/cam_2/frame_{i}_{j}.png'
+                    filename1 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
+                    filename2 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
                     saved1 = cv2.imwrite(filename1, frame_1)
                     saved2 = cv2.imwrite(filename2, frame_2)
 
@@ -169,7 +165,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
     )
 
     if save_meas_params:
-        with open(f"./data/{measure_name}/measure_{measure_name}.json", "x") as f:
+        with open(f'{config.DATA_PATH}/{measure_name}/' + config.MEASUREMENT_FILENAME_MASK.format(measure_name), 'x') as f:
             json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
 
     return meas1, meas2
@@ -225,15 +221,13 @@ def define_ROI(cameras: list[Camera], projector: Projector) -> None:
 
 if __name__ == '__main__':
 
-    with open("config.json") as f:
-        data = json.load(f)
     projector = Projector(
-        int(data["projector"]["width"]),
-        int(data["projector"]["height"]),
-        int(data["projector"]["min_brightness"]),
-        int(data["projector"]["max_brightness"]))
+        config.PROJECTOR_WIDTH,
+        config.PROJECTOR_HEIGHT,
+        config.PROJECTOR_MIN_BRIGHTNESS,
+        config.PROJECTOR_MAX_BRIGHTNESS)
 
-    cameras = initialize_cameras(cam_type='baumer', cam_to_found_number=2)
+    cameras = initialize_cameras(cam_type=config.CAMERA_TYPE, cam_to_found_number=2)
 
     choices = {i for i in range(6)}
 
@@ -268,8 +262,7 @@ if __name__ == '__main__':
             calibrate_projector(cameras, projector)
 
         elif (choice == 4):
-            time_delay = int(data['capture_parameters']['delay'])
-            measurements = capture_measurement_images(cameras, projector, time_delay)
+            measurements = capture_measurement_images(cameras, projector, config.MEASUREMENT_CAPTURE_DELAY)
             w_phases_1, uw_phases_1 = calculate_phase_for_fppmeasurement(measurements[0])
             w_phases_2, uw_phases_2 = calculate_phase_for_fppmeasurement(measurements[1])
 
