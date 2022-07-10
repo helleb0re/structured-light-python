@@ -6,20 +6,20 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 
-from camera_baumer import CameraBaumer
 
 from camera import Camera
-from camera_web import CameraWeb
 from projector import Projector
+from camera_web import CameraWeb
+from camera_baumer import CameraBaumer
+from camera_simulated import CameraSimulated
 from create_patterns import create_psp_template, create_psp_templates
 from hand_set_up_camera import camera_adjust, camera_baumer_adjust
 from calibration_patterns import calibration_patterns
-from data_experiment import ExperimentSettings
 from fpp_structures import FPPMeasurement
 from processing import calculate_phase_for_fppmeasurement
 
 
-def initialize_cameras(cam_type: str='web', cam_to_found_number: int=2) -> list[Camera]:
+def initialize_cameras(cam_type: str, cam_to_found_number: int=2) -> list[Camera]:
     '''
     Detect connected cameras
     '''
@@ -27,7 +27,11 @@ def initialize_cameras(cam_type: str='web', cam_to_found_number: int=2) -> list[
         cameras = CameraWeb.get_available_cameras(cam_to_found_number)
     elif cam_type == 'baumer':
         cameras = CameraBaumer.get_available_cameras(cam_to_found_number)
-        
+    elif cam_type == 'simulated':
+        cameras = CameraSimulated.get_available_cameras(cam_to_found_number)
+        # Set projector for simulated cameras
+        for camera in cameras:
+            camera.projector = projector
     return cameras
 
 
