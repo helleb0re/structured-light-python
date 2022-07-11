@@ -110,17 +110,31 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     # cv2.destroyWindow('cam2')
 
 def capture_measurement_images(cameras: list[Camera], projector: Projector) -> tuple[FPPMeasurement, FPPMeasurement]:
+    '''
+    Do fringe projection measurement. Generate pattern, project them via projector and capture images with cameras.
 
+    Args:
+        cameras (list[Camera]): list of available cameras to capture measurement images
+        projector (Projector): porjector to project patterns
+
+    Returns:
+        meas1 (FPPMeasurement): measurement for first camera
+        meas2 (FPPMeasurement): measurement for second camera
+    '''
+    # Create OpenCV GUI windows to show captured images
     cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam1', 600, 400)
     cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam2', 600, 400)
 
-    patterns, phase_shifts, frequencies = create_psp_templates(1920, 1080, 7)
+    # Create phase shift profilometry patterns
+    patterns, phase_shifts, frequencies = create_psp_templates(1920, 1080, [1, 4, 12, 48, 90])
 
+    # List to store captured images
     images1 = []
     images2 = []
 
+    # Create folders to save measurement results if defined in config
     if config.SAVE_MEASUREMENT_IMAGE_FILES:
         filenames1 = []
         filenames2 = []
@@ -129,8 +143,10 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector) -> t
         os.makedirs(f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/')
         os.makedirs(f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/')
 
+    # Set up projector
     projector.set_up_window()
 
+    # Iter thru generated patterns
     for i in range(len(patterns)):
 
         if config.SAVE_MEASUREMENT_IMAGE_FILES:
@@ -140,55 +156,73 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector) -> t
         img_for_one_freq1 = []
         img_for_one_freq2 = []
 
+        # Iter thru pattern with phase shifts for one frequency
         for j in range(len(patterns[i])):
+            # Project pattern
             projector.project_pattern(patterns[i][j])
 
+            # Capture one frame before measurement for wecams
             if cameras[0].type == 'web':
                 _1 = cameras[0].get_image()
             if cameras[1].type == 'web':
                 _2 = cameras[1].get_image()
 
-            while True:
-                cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
+            # Wait delay time before pattern projected and images captures
+            cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
 
-                frame_1 = cameras[0].get_image()
-                frame_2 = cameras[1].get_image()
+            # Capture images
+            frame_1 = cameras[0].get_image()
+            frame_2 = cameras[1].get_image()
 
-                if config.SAVE_MEASUREMENT_IMAGE_FILES:
-                    filename1 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
-                    filename2 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
-                    saved1 = cv2.imwrite(filename1, frame_1)
-                    saved2 = cv2.imwrite(filename2, frame_2)
-
-                    if saved1 and saved2:
-                        fn_for_one_freq1.append(filename1)
-                        fn_for_one_freq2.append(filename2)
-
-                img_for_one_freq1.append(frame_1)
-                img_for_one_freq2.append(frame_2)
-                    # else:
-                    #     raise Exception('Error during image saving!')
-                break
-
+            # Save images if defined in config
             if config.SAVE_MEASUREMENT_IMAGE_FILES:
-                filenames1.append(fn_for_one_freq1)
-                filenames2.append(fn_for_one_freq2)
+                filename1 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
+                filename2 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
+                saved1 = cv2.imwrite(filename1, frame_1)
+                saved2 = cv2.imwrite(filename2, frame_2)
 
+                # Store saved images filenames
+                if saved1 and saved2:
+                    fn_for_one_freq1.append(filename1)
+                    fn_for_one_freq2.append(filename2)
+                else:
+                    raise Exception('Error during image saving!')
+
+            # Store images for one frequency in one list 
+            img_for_one_freq1.append(frame_1)
+            img_for_one_freq2.append(frame_2)
+
+        # Store saved images filenames for one frequency
+        if config.SAVE_MEASUREMENT_IMAGE_FILES:
+            filenames1.append(fn_for_one_freq1)
+            filenames2.append(fn_for_one_freq2)
+        
+        # Store list of images for one frequency in total set images list
         images1.append(img_for_one_freq1)
         images2.append(img_for_one_freq2)
     
+    # Stop projector
     projector.close_window()
 
+    # Close OpenCV GUI windows
     cv2.destroyWindow('cam1')
     cv2.destroyWindow('cam2')
 
+    # Create FPPMeasurement instances with results
     meas1 = FPPMeasurement(
-        frequencies, phase_shifts, filename1 if config.SAVE_MEASUREMENT_IMAGE_FILES else [], images1
+        frequencies,
+        phase_shifts, 
+        filenames1 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
+        None if config.SAVE_MEASUREMENT_IMAGE_FILES else images1
     )
     meas2 = FPPMeasurement(
-        frequencies, phase_shifts, filename2 if config.SAVE_MEASUREMENT_IMAGE_FILES else [], images2
+        frequencies,
+        phase_shifts,
+        filenames2 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
+        None if config.SAVE_MEASUREMENT_IMAGE_FILES else images2
     )
 
+    # Save results of measurement in json file if defined in config
     if config.SAVE_MEASUREMENT_IMAGE_FILES:
         with open(f'{config.DATA_PATH}/{measure_name}/' + config.MEASUREMENT_FILENAME_MASK.format(measure_name), 'x') as f:
             json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
