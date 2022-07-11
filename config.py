@@ -41,6 +41,9 @@ MEASUREMENT_FILENAME_MASK = 'measure_{0}.json'
 # Cameras folders in measurment folder
 CAMERAS_FOLDER_NAMES = ('cam1', 'cam2')
 
+# Save measurement image files
+SAVE_MEASUREMENT_IMAGE_FILES = False
+
 # Delay between pattern projection and camera image capture in miliseconds
 MEASUREMENT_CAPTURE_DELAY = 300 # ms
 

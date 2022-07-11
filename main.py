@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import json
 from datetime import datetime
@@ -59,22 +61,43 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     win_size_x = 50
     win_size_y = 50
 
+    cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('cam1', 600, 400)
+    # cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
+    # cv2.resizeWindow('cam2', 600, 400)
+
     projector.set_up_window()
     
     brightness_vs_intensity = []
 
     image = np.zeros((projector.height, projector.width))
     
+    k = 5
+    temp_img = cameras[0].get_image()
+
     for intensity in range(256):
+        print(f'Calibrate {intensity = }')
         image[:,:] = intensity
-        projector.project_pattern(image)
+        projector.project_pattern(image, False)
 
-        img1 = cameras[0].get_image()
-        # img2 = cameras[1].get_image()
+        img1 = np.zeros(temp_img.shape, dtype=np.float64)
+        
+        for _ in range(k):
+            cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
 
-        brightness = np.mean(img1[img1.shape[0]/2 - win_size_x:img1.shape[0]/2 + win_size_x, img1.shape[1]/2 - win_size_y:img1.shape[1]/2 + win_size_y])
+            img1 = img1 + cameras[0].get_image()
+            # img2 = cameras[1].get_image()
+        
+        img1 = img1 / k
+        roi_x = slice(int(img1.shape[1]/2 - win_size_x), int(img1.shape[1]/2 + win_size_x))
+        roi_y = slice(int(img1.shape[0]/2 - win_size_y), int(img1.shape[0]/2 + win_size_y))
+        brightness = np.mean(img1[roi_y, roi_x])
 
         brightness_vs_intensity.append(brightness)
+
+        img_to_display = img1.astype(np.uint8)
+        cv2.rectangle(img_to_display, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
+        cv2.imshow('cam1', img_to_display)
 
     projector.close_window()
 
@@ -83,8 +106,10 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
 
     # TODO: calculate gamma coeficient and store it in Projector instance
 
+    cv2.destroyWindow('cam1')
+    # cv2.destroyWindow('cam2')
 
-def capture_measurement_images(cameras: list[Camera], projector: Projector, time_delay: float, save_meas_params: bool = False) -> tuple[FPPMeasurement, FPPMeasurement]:
+def capture_measurement_images(cameras: list[Camera], projector: Projector) -> tuple[FPPMeasurement, FPPMeasurement]:
 
     cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam1', 600, 400)
@@ -96,7 +121,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
     images1 = []
     images2 = []
 
-    if save_meas_params:
+    if config.SAVE_MEASUREMENT_IMAGE_FILES:
         filenames1 = []
         filenames2 = []
         measure_name = f'{datetime.now():%d-%m-%Y_%H-%M-%S}'
@@ -108,7 +133,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
 
     for i in range(len(patterns)):
 
-        if save_meas_params:
+        if config.SAVE_MEASUREMENT_IMAGE_FILES:
             fn_for_one_freq1 = []
             fn_for_one_freq2 = []
 
@@ -124,12 +149,12 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
                 _2 = cameras[1].get_image()
 
             while True:
-                cv2.waitKey(time_delay)
+                cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
 
                 frame_1 = cameras[0].get_image()
                 frame_2 = cameras[1].get_image()
 
-                if save_meas_params:
+                if config.SAVE_MEASUREMENT_IMAGE_FILES:
                     filename1 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
                     filename2 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
                     saved1 = cv2.imwrite(filename1, frame_1)
@@ -145,7 +170,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
                     #     raise Exception('Error during image saving!')
                 break
 
-            if save_meas_params:
+            if config.SAVE_MEASUREMENT_IMAGE_FILES:
                 filenames1.append(fn_for_one_freq1)
                 filenames2.append(fn_for_one_freq2)
 
@@ -158,13 +183,13 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, time
     cv2.destroyWindow('cam2')
 
     meas1 = FPPMeasurement(
-        frequencies, phase_shifts, filename1 if save_meas_params else [], images1
+        frequencies, phase_shifts, filename1 if config.SAVE_MEASUREMENT_IMAGE_FILES else [], images1
     )
     meas2 = FPPMeasurement(
-        frequencies, phase_shifts, filename2 if save_meas_params else [], images2
+        frequencies, phase_shifts, filename2 if config.SAVE_MEASUREMENT_IMAGE_FILES else [], images2
     )
 
-    if save_meas_params:
+    if config.SAVE_MEASUREMENT_IMAGE_FILES:
         with open(f'{config.DATA_PATH}/{measure_name}/' + config.MEASUREMENT_FILENAME_MASK.format(measure_name), 'x') as f:
             json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
 
@@ -262,7 +287,7 @@ if __name__ == '__main__':
             calibrate_projector(cameras, projector)
 
         elif (choice == 4):
-            measurements = capture_measurement_images(cameras, projector, config.MEASUREMENT_CAPTURE_DELAY)
+            measurements = capture_measurement_images(cameras, projector)
             w_phases_1, uw_phases_1 = calculate_phase_for_fppmeasurement(measurements[0])
             w_phases_2, uw_phases_2 = calculate_phase_for_fppmeasurement(measurements[1])
 
