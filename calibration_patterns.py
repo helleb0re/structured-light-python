@@ -102,14 +102,13 @@ def calibration_patterns(patterns, cameras, projector):
         if cameras[1].type == 'web':
             frame_2 = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
         
-        m, n, _ = frame_1.shape
         a1 = f.add_subplot(221)
-        a1.plot(range(n), frame_1[520, :])
+        a1.plot(frame_1[520, :])
         b1 = f.add_subplot(222)
         b1.imshow(frame_1)
 
         a2 = f.add_subplot(223)
-        a2.plot(range(n), frame_2[520, :])
+        a2.plot(frame_2[520, :])
         b2 = f.add_subplot(224)
         b2.imshow(frame_2)
         root.update()
