@@ -27,19 +27,23 @@ class Projector():
         cv2.moveWindow('Projector window', 1920, 0)
         self.window_exist = True
 
-    def project_pattern(self, pattern: np.ndarray) -> None:
+    def project_pattern(self, pattern: np.ndarray, correction: bool = True) -> None:
         '''
         Project pattern thru OpenCV GUI window, before projection pattern is intensity corrected
 
         Args:
             pattern (numpy array): image to project with OpenCV imshow method
+            correction (bool): do intensity correction before project pattern
         '''
         # Open OpenCV GUI window, if it is has not been already opened
         if not self.window_exist:
             self.set_up_window()
         
         # Correct image with calibration coefficients
-        self._corrected_pattern = self.image_brightness_rescale_factor * (pattern + 1) + self.min_image_brightness
+        if correction:
+            self._corrected_pattern = self.image_brightness_rescale_factor * (pattern + 1) + self.min_image_brightness
+        else:
+            self._corrected_pattern = pattern
         # Show image at OpenCV GUI window
         cv2.imshow('Projector window', self._corrected_pattern.astype(np.uint8))
 
