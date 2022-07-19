@@ -1,6 +1,7 @@
 '''Module to store utils for working with data'''
 
 from __future__ import annotations
+from typing import Optional
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -47,6 +48,32 @@ def create_fpp_measurement_from_files(files_path : str, file_mask : str, shifts_
     
     return measurement
 
+def get_quiverplot(coords: np.ndarray, maximums: np.ndarray, image: Optional[np.ndarray], stretch_factor: float = 5.0):
+    """Draw a vector field of displacements on input image (if defined)
+
+        Args:
+            coords (list[np.ndarray]): list of vectors start points
+            maximums (list[np.ndarray]): list of vectors end points
+            image=None (np.ndarray): image to draw vector field on
+            stretch_factor=5.0 (float): magnitude factor for vector length
+    """      
+    x = [coord[0] for coord in coords]
+    y = [coord[1] for coord in coords]
+    u = [maximum[0] * stretch_factor for maximum in maximums]
+    v = [maximum[1] * stretch_factor for maximum in maximums]
+    c = [maximum[2] for maximum in maximums]
+
+    plt.quiver(x, y, u, v, c, scale=1, units='xy', cmap='jet')
+    cbar = plt.colorbar()
+    cbar.ax.set_ylabel('Normal correlation function maximum')
+
+    plt.xlabel('X, pixels')
+    plt.ylabel('Y, pixels')
+        
+    if image is not None:
+        plt.imshow(image, cmap='gray')
+     
+    plt.show()
 
 files_path = './frames_21_06/cam_1/'
 img_mask = 'frame_{0}_{1}.png'
