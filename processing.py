@@ -1,6 +1,7 @@
 '''Module to process FPP images'''
 
 from __future__ import annotations
+from dataclasses import field
 
 from typing import Optional
 
@@ -170,3 +171,122 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
             unwrapped_phases.append(unwrapped_phase)
     
     return phases, unwrapped_phases
+
+def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_size_x: int, win_size_y: int, step_x: int, step_y: int) -> np. ndarray:
+    '''
+    Calculate displacement field between two scalar fields thru correlation.
+
+    Args:
+        field1 (2D numpy array): first scalar field
+        field2 (2D numpy array): second scalar field
+        win_size_x (int): interrogation window horizontal size
+        win_size_y (int): interrogation window vertical size
+        step_x (int): horizontal step for dividing on interrogation windows
+        step_y (int): vertical step for dividing on interrogation windows
+    Returns:
+        vector_field (): vector field of displacements
+    '''
+    assert field1.shape == field2.shape, 'Shapes of field1 and field2 must be equals'
+    assert win_size_x > 4 and win_size_y > 4, 'Size of interrogation windows should be greater than 4 pixels'
+    assert step_x > 0 and step_y > 0, 'Horizontal and vertical steps should be greater than zero'
+
+    # Get interrogation windows
+    list_of_windows = [[], []]
+    list_of_coords = []
+    
+    width = field1.shape[1]
+    height = field1.shape[0]
+    num_win_x = range(np.floor((width - win_size_x)/step_x + 1))
+    num_win_y = range(np.floor((height - win_size_y)/step_y + 1))
+       
+    for i in num_win_x:
+        start_x = step_x * i
+        center_x = np.round(end_x - win_size_x / 2)
+        end_x = step_x * i + win_size_x
+        center_y = np.round(end_y - win_size_y / 2)
+
+        for j in num_win_y:
+            start_y = step_y * j
+            end_y = step_y * j + win_size_y
+
+            window1 = field1[start_y:end_y, start_x:end_x]
+            window2 = field2[start_y:end_y, start_x:end_x]
+            list_of_windows[0].append(window1)
+            list_of_windows[1].append(window2)
+            list_of_coords.append([center_x, center_y])
+
+    # Calculate correlation function
+    correlation_list = []
+
+    for i in range(len(list_of_windows[0])):
+        mean1 = np.mean(list_of_windows[0][i])
+        std1 = np.std(list_of_windows[0][i])
+        mean2 = np.mean(list_of_windows[1][i])
+        std2 = np.std(list_of_windows[1][i])
+        a = np.fft.rfft2(list_of_windows[0][i] - mean1, norm='ortho')
+        b = np.fft.rfft2(list_of_windows[1][i] - mean2, norm='ortho')
+        c = np.multiply(a, b.conjugate())
+        d = np.fft.irfft2(c)
+        if std1 == 0:
+            std1 = 1
+        if std2 == 0:
+            std2 = 1
+        e = d / (std1 * std2)
+        correlation_list.append(e)
+
+    # Find maximums
+    maximums_list = []
+
+    for i in range(len(correlation_list)):
+        
+        # Find maximum indexes for x and y
+        maximum = np.unravel_index(correlation_list[i].argmax(), correlation_list[i].shape)                        
+
+        # Get neighborhood pixels of maximum at X axis 
+        cx0 = np.fabs(correlation_list[i][maximum[0], maximum[1] - 1])
+        cx1 = np.fabs(correlation_list[i][maximum[0], maximum[1]    ])
+
+        if (maximum[1] == correlation_list[i].shape[1]):
+            cx2 = np.fabs(correlation_list[i][maximum[0], maximum[1] + 1])
+        else:
+            cx2 = np.fabs(correlation_list[i][maximum[0], 0])
+
+        # Get neighborhood pixels of maximum at Y axis 
+        cy0 = np.fabs(correlation_list[i][maximum[0] - 1, maximum[1]])
+        cy1 = np.fabs(correlation_list[i][maximum[0]    , maximum[1]])
+
+        if (maximum[0] == correlation_list[i].shape[0]):
+            cy2 = np.fabs(correlation_list[i][maximum[0] + 1, maximum[1]])
+        else:
+            cy2 = np.fabs(correlation_list[i][0, maximum[1]])
+
+        # 3-point gauss fit
+        try:
+            x_max = maximum[1] + (np.log(cx0)  - np.log(cx2))/(2 * np.log(cx0) - 4 * np.log(cx1) + 2 * np.log(cx2))
+        except (ZeroDivisionError, ValueError):
+            x_max = 0
+        try:
+            y_max = maximum[0] + (np.log(cy0)  - np.log(cy2))/(2 * np.log(cy0) - 4 * np.log(cy1) + 2 * np.log(cy2))
+        except (ZeroDivisionError, ValueError):
+            y_max = 0
+
+
+        # Shift maximum due to pereodic of correlation function
+        if x_max > correlation_list[i].shape[0] / 2:
+            x_max = x_max - correlation_list[i].shape[0]
+        elif np.fabs(x_max) < 0.01:
+            x_max = 0
+
+        # Shift maximum due to pereodic of correlation function
+        if y_max > correlation_list[i].shape[1] / 2:
+            y_max = y_max - correlation_list[i].shape[1]
+        elif np.fabs(y_max) < 0.01:
+            y_max = 0
+
+        # Not actual maximum value
+        maximums_list.append([-x_max, y_max, np.max(correlation_list[i])])
+
+    # Create vector field
+    vector_field = []
+
+    return vector_field
