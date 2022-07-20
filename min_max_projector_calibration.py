@@ -20,7 +20,7 @@ import numpy as np
 import cv2
 
 
-def calibration_patterns(patterns, cameras, projector):
+def MinMaxProjectorCalibration(patterns, cameras, projector):
     end = False
     pattern_num = 0
 
@@ -63,15 +63,19 @@ def calibration_patterns(patterns, cameras, projector):
     def slider_min_changed(event):
         projector.min_image_brightness = current_min_brightness.get()
 
-    current_max_brightness = Tk.IntVar(value=projector.max_image_brightness)
-    current_min_brightness = Tk.IntVar(value=projector.min_image_brightness)
-    scale_max = Tk.Scale(root, orient="horizontal", resolution=1,
-                            from_=0, to=255, 
+    current_max_brightness = Tk.DoubleVar(value=projector.max_image_brightness)
+    current_min_brightness = Tk.DoubleVar(value=projector.min_image_brightness)
+    scale_max = Tk.Scale(root, orient="horizontal",
+                            from_=0, to=1.0,
+                            digits=4,
+                            resolution=0.01,
                             variable=current_max_brightness,
                             command=slider_max_changed,
                             length=300)
-    scale_min = Tk.Scale(root, orient="horizontal", resolution=1,
-                            from_=0, to=255, 
+    scale_min = Tk.Scale(root, orient="horizontal",
+                            from_=0, to=1.0, 
+                            digits=4,
+                            resolution=0.01,
                             variable=current_min_brightness,
                             command=slider_min_changed,
                             length=300)
@@ -104,11 +108,13 @@ def calibration_patterns(patterns, cameras, projector):
         
         a1 = f.add_subplot(221)
         a1.plot(frame_1[520, :])
+        a1.set_ylim((0, 255))
         b1 = f.add_subplot(222)
         b1.imshow(frame_1)
 
         a2 = f.add_subplot(223)
         a2.plot(frame_2[520, :])
+        a2.set_ylim((0, 255))
         b2 = f.add_subplot(224)
         b2.imshow(frame_2)
         root.update()
