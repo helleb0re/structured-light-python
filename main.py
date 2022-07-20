@@ -325,55 +325,6 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector) -> t
     return meas1, meas2
 
 
-def define_ROI(cameras: list[Camera], projector: Projector) -> None:
-
-    projector.set_up_window()
-    
-    white_screen = np.ones(projector.resolution)
-
-    cv2.namedWindow('cam', cv2.WINDOW_NORMAL)
-    cv2.resizeWindow('cam', 600, 400)
-
-    # background photos
-    background_photos = []
-    for cam in cameras:
-        k = 0
-        while k != 27:
-            #__ = cam.get_image()
-            gray = cam.get_image()
-            if gray.shape[2] > 1:
-                gray = cv2.cvtColor(cam.get_image(), cv2.COLOR_BGR2GRAY)
-            cv2.imshow("cam", gray)
-            k = cv2.waitKey(100)
-        background_photos.append(gray)
-    
-    # define measuring area
-    whiteround_photos = []
-
-    projector.project_pattern(white_screen)
-
-    for cam in cameras:
-        k = 0
-        while k != 27:
-            #__ = cam.get_image()
-            gray = cam.get_image()
-            if gray.shape[2] > 1:
-                gray = cv2.cvtColor(gray, cv2.COLOR_BGR2GRAY)
-            cv2.imshow("cam", gray)
-            k = cv2.waitKey(100)
-        whiteround_photos.append(gray)
-
-    projector.close_window()
-
-    # i = 0
-    # for photo1, photo2 in zip(background_photos, whiteround_photos):
-    #     cv2.imwrite(f'./data/background_{i}.png', photo1)
-    #     cv2.imwrite(f'./data/whiteground_{i}.png', photo2)
-    #     i = i + 1
-    
-    cv2.destroyWindow('cam')
-
-
 if __name__ == '__main__':
 
     projector = Projector(
@@ -387,20 +338,22 @@ if __name__ == '__main__':
     choices = {i for i in range(6)}
 
     while True:
-        print(f"Подключено {len(cameras)} камер")
+        print(f"Connected {len(cameras)} camera(s)")
         print("==========================================================")
-        print("1 - Настройка параметров камеры")
-        print("2 - Определение области проецированния шаблонов")
-        print("3 - Калибровка проецируемого изображения")
-        print("4 - Проведение измерения")
+        print("1 - Adjust cameras")        
+        print("2 - Projector gamma correction calibration")
+        print("3 - Check brightness profile")
+        print("4 - Take measurements")
         print("==========================================================")
-        print("0 - Выход из программы")
-        answer = input("Введите что-нибудь из предложенного списка выше: ")
+        print("0 - Exit script")
+        answer = input("Type something from the suggested list above: ")
 
-        # try:
-        #     if int(answer) not in choices: raise Exception()
-        #     else:
-        choice = int(answer)
+        try:
+            if int(answer) not in choices: raise Exception()
+        except:
+            continue
+        else:
+            choice = int(answer)
 
         if (choice == 0):
             break
@@ -409,12 +362,11 @@ if __name__ == '__main__':
             adjust_cameras(cameras)
 
         elif (choice == 2):
-            define_ROI(cameras, projector)
+            calibrate_projector(cameras, projector)
 
         elif (choice == 3):
-            #test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
-            #calibration_patterns(test_pattern, cameras, projector)
-            calibrate_projector(cameras, projector)
+            test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
+            calibration_patterns(test_pattern, cameras, projector)
 
         elif (choice == 4):
             measurements = capture_measurement_images(cameras, projector)
@@ -440,7 +392,3 @@ if __name__ == '__main__':
                 plt.colorbar()
 
                 plt.show()
-
-        # except:
-        #     print("Введите одно из представленных значений на выбор.")
-        #     continue
