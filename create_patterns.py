@@ -38,7 +38,7 @@ def create_psp_template(width: int, height: int, frequency: float, shifts_number
     
     for phase_shift in phase_shifts:
         # Calculate cos sequence with defined parameters
-        cos = np.cos(2 * np.pi * frequency * (x / length) - phase_shift)
+        cos = 0.5 + 0.5 * np.cos(2 * np.pi * frequency * (x / length) - phase_shift)
         
         # Tile cos sequence for vertical or horizontal fringe orientation
         if vertical:
