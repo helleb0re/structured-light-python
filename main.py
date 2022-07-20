@@ -6,6 +6,7 @@ from datetime import datetime
 
 import cv2
 import numpy as np
+from scipy import optimize
 from matplotlib import pyplot as plt
 
 import config
@@ -57,57 +58,148 @@ def adjust_cameras(cameras: list[Camera]) -> None:
 def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     '''
     Сalibrate projector image with gamma correction
-    '''
-    win_size_x = 50
-    win_size_y = 50
 
+    Args:
+        cameras (list[Camera]): list of available cameras to capture measurement images
+        projector (Projector): porjector to project patterns
+    '''
+    brightness, _ = get_brightness_vs_intensity(cameras, projector, use_correction=False)
+
+    plt.plot(brightness)
+    plt.show()
+
+    # Calculate gamma coeficient
+    # Mare intensity linsapce
+    intensity = np.linspace(0, np.max(brightness), len(brightness))
+
+    # Find saturation level
+    saturation_level = 0.95
+    k = 0
+    for i in range(len(intensity)):
+        if brightness[i] > np.max(brightness) * saturation_level:
+            k = k + 1
+            if k > 3:
+                saturation = i - 2
+                break
+
+    # Reduce sequency to saturation level
+    int_reduced = intensity[:saturation]
+    brt_reduced = brightness[:saturation]
+
+    # Gamma function to fit
+    lam = lambda x,a,b,c: a*x**b + c
+
+    # Fit gamma function parameters for reduced brightness vs intensity sequence
+    popt, pcov = optimize.curve_fit(lam, int_reduced, brt_reduced, p0=(1,1,1))
+    print(f'Fitted gamma function - Iout = {popt[0]:.3f} * Iin ^ {popt[1]:.3f} + {popt[2]:.3f}')
+
+    # Draw fitted gamma function
+    gg = lam(intensity, *popt)
+
+    plt.plot(intensity, brightness, 'b+')
+    plt.plot(intensity, gg, 'r-')
+    plt.xlabel('Intensity, relative units')
+    plt.нlabel('Brightness, relative units')
+    plt.xlim((0, 1))
+    plt.ylim((0, 1))
+    plt.grid()
+    plt.show()
+
+    # Store new gamma correction coefficients
+    config.PROJECTOR_GAMMA_A = popt[0]
+    config.PROJECTOR_GAMMA_B = popt[1]
+    config.PROJECTOR_GAMMA_C = popt[2]
+    config.save_calibration_data()
+
+    # Check gamma correction
+    brt_corrected, _ = get_brightness_vs_intensity(cameras, projector, use_correction=True)
+
+    # Draw corrected brightness vs intensity
+    plt.plot(intensity, brt_corrected, 'b+')
+    plt.xlabel('Intensity, relative units')
+    plt.нlabel('Brightness, relative units')
+    plt.xlim((0, 1))
+    plt.ylim((0, 1))
+    plt.grid()
+    plt.show()
+
+
+def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, use_correction: bool) -> list[float]:
+    '''
+    Get brightness vs intensity dependence by projecting constant intensity
+    on screen and capture images with cameras. Brightness is averaged in small
+    region for several captured images.
+
+    Args:
+        cameras (list[Camera]): list of available cameras to capture measurement images
+        projector (Projector): porjector to project patterns
+        use_correction (bool): use correction to project patterns
+    '''
     cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam1', 600, 400)
-    # cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
-    # cv2.resizeWindow('cam2', 600, 400)
+    cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('cam2', 600, 400)
 
+    # TODO: Add parameters to config
+    win_size_x = 50
+    win_size_y = 50
+    max_intensity = 256
+    average_num = 5
+    border_width = 20
+    
     projector.set_up_window()
     
-    brightness_vs_intensity = []
+    # TODO: Make generic to number of cameras
+    brightness1 = []
+    brightness2 = []
 
+    # Make thin black and white borders
     image = np.zeros((projector.height, projector.width))
+    image[border_width:-border_width,border_width:-border_width] = max_intensity
     
-    k = 5
     temp_img = cameras[0].get_image()
 
-    for intensity in range(256):
-        print(f'Calibrate {intensity = }')
-        image[:,:] = intensity
-        projector.project_pattern(image, False)
+    for intensity in range(max_intensity):
+        image[2*border_width:-2*border_width,2*border_width:-2*border_width] = intensity / max_intensity
+        projector.project_pattern(image, use_correction)
 
         img1 = np.zeros(temp_img.shape, dtype=np.float64)
+        img2 = np.zeros(temp_img.shape, dtype=np.float64)
         
-        for _ in range(k):
+        for _ in range(average_num):
             cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
 
             img1 = img1 + cameras[0].get_image()
-            # img2 = cameras[1].get_image()
+            img2 = img2 + cameras[1].get_image()
         
-        img1 = img1 / k
+        img1 = img1 / average_num 
+        img2 = img2 / average_num 
         roi_x = slice(int(img1.shape[1]/2 - win_size_x), int(img1.shape[1]/2 + win_size_x))
         roi_y = slice(int(img1.shape[0]/2 - win_size_y), int(img1.shape[0]/2 + win_size_y))
-        brightness = np.mean(img1[roi_y, roi_x])
+        brt1 = np.mean(img1[roi_y, roi_x]) / max_intensity
+        brt2 = np.mean(img2[roi_y, roi_x]) / max_intensity
 
-        brightness_vs_intensity.append(brightness)
+        brightness1.append(brt1)
+        brightness2.append(brt2)
 
-        img_to_display = img1.astype(np.uint8)
-        cv2.rectangle(img_to_display, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
-        cv2.imshow('cam1', img_to_display)
+        img_to_display1 = img1.astype(np.uint8)
+        cv2.rectangle(img_to_display1, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
+        cv2.putText(img_to_display1, f'{intensity = }', (50,50), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
+        cv2.putText(img_to_display1, f'Brightness = {brt1:.3f}', (50,100), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
+        cv2.imshow('cam1', img_to_display1)
+
+        img_to_display2 = img2.astype(np.uint8)
+        cv2.rectangle(img_to_display2, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
+        cv2.putText(img_to_display2, f'{intensity = }', (50,50), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
+        cv2.putText(img_to_display2, f'Brightness = {brt2:.3f}', (50,100), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
+        cv2.imshow('cam2', img_to_display2)
 
     projector.close_window()
-
-    plt.plot(brightness_vs_intensity)
-    plt.show()
-
-    # TODO: calculate gamma coeficient and store it in Projector instance
-
     cv2.destroyWindow('cam1')
-    # cv2.destroyWindow('cam2')
+    cv2.destroyWindow('cam2')
+
+    return brightness1, brightness2
+
 
 def capture_measurement_images(cameras: list[Camera], projector: Projector) -> tuple[FPPMeasurement, FPPMeasurement]:
     '''
@@ -229,6 +321,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector) -> t
 
     return meas1, meas2
 
+
 def define_ROI(cameras: list[Camera], projector: Projector) -> None:
 
     projector.set_up_window()
@@ -316,8 +409,8 @@ if __name__ == '__main__':
             define_ROI(cameras, projector)
 
         elif (choice == 3):
-            # test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
-            # calibration_patterns(test_pattern, cameras, projector)
+            #test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
+            #calibration_patterns(test_pattern, cameras, projector)
             calibrate_projector(cameras, projector)
 
         elif (choice == 4):

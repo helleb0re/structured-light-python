@@ -4,6 +4,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 
+import config
+
 
 class Projector():
     '''
@@ -41,11 +43,12 @@ class Projector():
         
         # Correct image with calibration coefficients
         if correction:
-            self._corrected_pattern = self.image_brightness_rescale_factor * (pattern + 1) + self.min_image_brightness
+            # self._corrected_pattern = self.image_brightness_rescale_factor * (pattern + 1) + self.min_image_brightness
+            self._corrected_pattern = ((pattern - config.PROJECTOR_GAMMA_C) / config.PROJECTOR_GAMMA_A) ** (1 / config.PROJECTOR_GAMMA_B)
         else:
             self._corrected_pattern = pattern
         # Show image at OpenCV GUI window
-        cv2.imshow('Projector window', self._corrected_pattern.astype(np.uint8))
+        cv2.imshow('Projector window', self._corrected_pattern)
 
     def close_window(self) -> None:
         '''
