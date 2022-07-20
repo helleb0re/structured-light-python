@@ -266,6 +266,9 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector) -> t
             frame_1 = cameras[0].get_image()
             frame_2 = cameras[1].get_image()
 
+            cv2.imshow('cam1', frame_1)
+            cv2.imshow('cam2', frame_2)
+
             # Save images if defined in config
             if config.SAVE_MEASUREMENT_IMAGE_FILES:
                 filename1 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
