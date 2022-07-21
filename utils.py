@@ -3,6 +3,8 @@
 from __future__ import annotations
 from typing import Optional
 
+import json
+
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -48,7 +50,36 @@ def create_fpp_measurement_from_files(files_path : str, file_mask : str, shifts_
     
     return measurement
 
-def get_quiverplot(coords: np.ndarray, maximums: np.ndarray, image: Optional[np.ndarray], stretch_factor: float = 5.0):
+
+def load_fpp_measurements(file: str) -> list[FPPMeasurement]:
+    '''
+    Load FPPMeasurements from json file
+    
+    Args:
+        file (str): the path to FPPMeasurements json file 
+
+    Returns:
+        measurements (list[FPPMeasurement]): list of FPPMeasurement instances loaded from file
+    '''
+    measurements = []
+
+    with open(file, 'r') as fp:
+        data = json.load(fp)
+
+    for instance in data:
+        # Create new FPPMeasurement instance
+        measurement = FPPMeasurement(
+            shifts = instance['shifts'],
+            frequencies = instance['frequencies'],
+            imgs_file_names = instance['imgs_file_names'],
+        )
+
+        measurements.append(measurement)
+
+    return measurements 
+
+
+def get_quiverplot(coords: np.ndarray, maximums: np.ndarray, image: Optional[np.ndarray] = None, stretch_factor: float = 5.0):
     """Draw a vector field of displacements on input image (if defined)
 
         Args:
@@ -73,18 +104,4 @@ def get_quiverplot(coords: np.ndarray, maximums: np.ndarray, image: Optional[np.
     if image is not None:
         plt.imshow(image, cmap='gray')
      
-    plt.show()
-
-files_path = './frames_21_06/cam_1/'
-img_mask = 'frame_{0}_{1}.png'
-shifts_count = 4
-frequencies = [1 + i* 3 for i in range(7)] 
-
-measurement = create_fpp_measurement_from_files(files_path, img_mask, shifts_count, frequencies)
-
-phases, unwrapped_phases = calculate_phase_for_fppmeasurement(measurement)
-
-for phase in unwrapped_phases:
-    plt.imshow(phase, cmap='gray')
-    plt.colorbar()
     plt.show()
