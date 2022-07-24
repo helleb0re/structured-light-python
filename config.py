@@ -13,10 +13,10 @@ PROJECTOR_HEIGHT = 720
 
 # Maximum and minimum brightness for projected image correction
 # Given values are default, the current values are loaded from the calibration file
-PROJECTOR_MIN_BRIGHTNESS = 0
-PROJECTOR_MAX_BRIGHTNESS = 255
+PROJECTOR_MIN_BRIGHTNESS = 0.0
+PROJECTOR_MAX_BRIGHTNESS = 1.0
 
-# Gamma correction coefficients for formula Iout = a * Iin ^ b + c
+# Gamma correction coefficients for formula Iout = a * (Iin + c) ^ b
 # Given values are default, the current values are loaded from the calibration file
 PROJECTOR_GAMMA_A = 255
 PROJECTOR_GAMMA_B = 2.2

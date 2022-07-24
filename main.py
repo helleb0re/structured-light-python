@@ -15,9 +15,9 @@ from projector import Projector
 from camera_web import CameraWeb
 from camera_baumer import CameraBaumer
 from camera_simulated import CameraSimulated
-from create_patterns import create_psp_template, create_psp_templates
+from create_patterns import create_psp_templates
 from hand_set_up_camera import camera_adjust, camera_baumer_adjust
-from calibration_patterns import calibration_patterns
+from min_max_projector_calibration import MinMaxProjectorCalibration
 from fpp_structures import FPPMeasurement
 from processing import calculate_phase_for_fppmeasurement
 
@@ -65,9 +65,6 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     '''
     brightness, _ = get_brightness_vs_intensity(cameras, projector, use_correction=False)
 
-    plt.plot(brightness)
-    plt.show()
-
     # Calculate gamma coeficient
     # Mare intensity linsapce
     intensity = np.linspace(0, np.max(brightness), len(brightness))
@@ -87,11 +84,11 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     brt_reduced = brightness[:saturation]
 
     # Gamma function to fit
-    lam = lambda x,a,b,c: a*x**b + c
+    lam = lambda x,a,b,c: a*(x + c)**b
 
     # Fit gamma function parameters for reduced brightness vs intensity sequence
     popt, pcov = optimize.curve_fit(lam, int_reduced, brt_reduced, p0=(1,1,1))
-    print(f'Fitted gamma function - Iout = {popt[0]:.3f} * Iin ^ {popt[1]:.3f} + {popt[2]:.3f}')
+    print(f'Fitted gamma function - Iout = {popt[0]:.3f} * (Iin + {popt[2]:.3f}) ^ {popt[1]:.3f}')
 
     # Draw fitted gamma function
     gg = lam(intensity, *popt)
@@ -99,7 +96,7 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     plt.plot(intensity, brightness, 'b+')
     plt.plot(intensity, gg, 'r-')
     plt.xlabel('Intensity, relative units')
-    plt.нlabel('Brightness, relative units')
+    plt.ylabel('Brightness, relative units')
     plt.xlim((0, 1))
     plt.ylim((0, 1))
     plt.grid()
@@ -117,7 +114,7 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     # Draw corrected brightness vs intensity
     plt.plot(intensity, brt_corrected, 'b+')
     plt.xlabel('Intensity, relative units')
-    plt.нlabel('Brightness, relative units')
+    plt.ylabel('Brightness, relative units')
     plt.xlim((0, 1))
     plt.ylim((0, 1))
     plt.grid()
@@ -366,29 +363,19 @@ if __name__ == '__main__':
 
         elif (choice == 3):
             test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
-            calibration_patterns(test_pattern, cameras, projector)
+            MinMaxProjectorCalibration(test_pattern, cameras, projector)
 
         elif (choice == 4):
             measurements = capture_measurement_images(cameras, projector)
             w_phases_1, uw_phases_1, _, _ = calculate_phase_for_fppmeasurement(measurements[0])
             w_phases_2, uw_phases_2, _, _ = calculate_phase_for_fppmeasurement(measurements[1])
 
-            for w_phase_1, uw_phase_1, w_phase_2, uw_phase_2 in zip(
-                w_phases_1, uw_phases_1, w_phases_2, uw_phases_2):
-                plt.subplot(221)
-                plt.imshow(w_phase_1, cmap="gray")
-                plt.colorbar()
+            plt.subplot(121)
+            plt.imshow(uw_phases_1[-1], cmap="gray")
+            plt.colorbar()
 
-                plt.subplot(222)
-                plt.imshow(uw_phase_1, cmap="gray")
-                plt.colorbar()
+            plt.subplot(122)
+            plt.imshow(uw_phases_2[-1], cmap="gray")
+            plt.colorbar()
 
-                plt.subplot(223)
-                plt.imshow(w_phase_2, cmap="gray")
-                plt.colorbar()
-
-                plt.subplot(224)
-                plt.imshow(uw_phase_2, cmap="gray")
-                plt.colorbar()
-
-                plt.show()
+            plt.show()
