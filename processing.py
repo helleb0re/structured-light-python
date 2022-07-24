@@ -7,7 +7,7 @@ from typing import Optional
 
 import cv2
 import numpy as np
-from matplotlib import pyplot as plt
+from scipy import signal
 
 from create_patterns import *
 from fpp_structures import FPPMeasurement 
@@ -72,11 +72,14 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
         temp1 = np.multiply(imgs, np.sin(phase_shifts + phase_sup))
         temp2 = np.multiply(imgs, np.cos(phase_shifts + phase_sup))
 
-        result_phase = np.arctan2(np.sum(temp1, 0), np.sum(temp2, 0))
+        sum1 = np.sum(temp1, 0)
+        sum2 = np.sum(temp2, 0)
+
+        result_phase = np.arctan2(sum1, sum2)
 
         # Calculate formula (9-10) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-        average_intensity = np.mean(imgs, 0) / len(images)
-        modulated_intensity = 2 * np.sqrt(np.power(np.sum(temp1, 0), 2) + np.power(np.sum(temp2, 0), 2)) / len(images)
+        average_intensity = np.mean(imgs, 0)
+        modulated_intensity = 2 * np.sqrt(np.power(sum1, 2) + np.power(sum2, 2)) / len(images)
 
     return result_phase, average_intensity, modulated_intensity
 
@@ -106,7 +109,6 @@ def calculate_unwraped_phase(phase_l: np.ndarray, phase_h: np.ndarray, lamb_l:fl
     unwrapped_phase = phase_h + 2 * np.pi * k
 
     return unwrapped_phase
-
 
 
 def load_image(path: str) -> np.ndarray:
@@ -140,7 +142,6 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
         phases (List of 2D numpy array): wrapped phases
         unwrapped_phases (List of 2D numpy array): unwrapped phase
     '''
-
     # Load measurement data
     shifts_count = measurement.shifts_count
     frequencies = measurement.frequencies
@@ -149,9 +150,10 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
 
     phases = []
     unwrapped_phases = []
+    avg_ints = []
+    mod_ints = []
 
     for i in range(frequency_counts):
-
         images_for_one_frequency = []
 
         if images is None:
@@ -162,15 +164,22 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
             images_for_one_frequency = images[i]
 
         phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, measurement.shifts, measurement.frequencies[i])
-        phases.append(phase)
 
+        mask = np.where(mod_int > 5, 1, 0) 
+        phase = phase * mask
+
+        phases.append(phase)
+        avg_ints.append(avg_int)
+        mod_ints.append(mod_int)
+        
         if i == 0:
             unwrapped_phases.append(phase)
         else:
             unwrapped_phase = calculate_unwraped_phase(unwrapped_phases[i-1], phases[i], 1 / frequencies[i-1], 1 / frequencies[i])
             unwrapped_phases.append(unwrapped_phase)
     
-    return phases, unwrapped_phases
+    return phases, unwrapped_phases, avg_ints, mod_ints
+
 
 def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_size_x: int, win_size_y: int, step_x: int, step_y: int) -> np. ndarray:
     '''
@@ -196,18 +205,18 @@ def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_siz
     
     width = field1.shape[1]
     height = field1.shape[0]
-    num_win_x = range(np.floor((width - win_size_x)/step_x + 1))
-    num_win_y = range(np.floor((height - win_size_y)/step_y + 1))
+    num_win_x = range(int(np.floor((width - win_size_x)/step_x + 1)))
+    num_win_y = range(int(np.floor((height - win_size_y)/step_y + 1)))
        
     for i in num_win_x:
         start_x = step_x * i
-        center_x = np.round(end_x - win_size_x / 2)
         end_x = step_x * i + win_size_x
-        center_y = np.round(end_y - win_size_y / 2)
+        center_x = np.round(end_x - win_size_x / 2)
 
         for j in num_win_y:
             start_y = step_y * j
             end_y = step_y * j + win_size_y
+            center_y = np.round(end_y - win_size_y / 2)
 
             window1 = field1[start_y:end_y, start_x:end_x]
             window2 = field2[start_y:end_y, start_x:end_x]
@@ -218,7 +227,14 @@ def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_siz
     # Calculate correlation function
     correlation_list = []
 
+    # Create 2D Gauss kernel
+    gauss = np.outer(signal.windows.gaussian(win_size_x, win_size_x / 2),
+                     signal.windows.gaussian(win_size_y, win_size_y / 2))
+
     for i in range(len(list_of_windows[0])):
+        # Windowing interrogation windows
+        list_of_windows[0][i] = list_of_windows[0][i] * gauss
+        list_of_windows[1][i] = list_of_windows[1][i] * gauss
         mean1 = np.mean(list_of_windows[0][i])
         std1 = np.std(list_of_windows[0][i])
         mean2 = np.mean(list_of_windows[1][i])
@@ -262,11 +278,11 @@ def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_siz
 
         # 3-point gauss fit
         try:
-            x_max = maximum[1] + (np.log(cx0)  - np.log(cx2))/(2 * np.log(cx0) - 4 * np.log(cx1) + 2 * np.log(cx2))
+            x_max = maximum[1] + (np.log(np.abs(cx0))  - np.log(np.abs(cx2)))/(2 * np.log(np.abs(cx0)) - 4 * np.log(np.abs(cx1)) + 2 * np.log(np.abs(cx2)))
         except (ZeroDivisionError, ValueError):
             x_max = 0
         try:
-            y_max = maximum[0] + (np.log(cy0)  - np.log(cy2))/(2 * np.log(cy0) - 4 * np.log(cy1) + 2 * np.log(cy2))
+            y_max = maximum[0] + (np.log(np.abs(cy0))  - np.log(np.abs(cy2)))/(2 * np.log(np.abs(cy0)) - 4 * np.log(np.abs(cy1)) + 2 * np.log(np.abs(cy2)))
         except (ZeroDivisionError, ValueError):
             y_max = 0
 
@@ -284,9 +300,9 @@ def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_siz
             y_max = 0
 
         # Not actual maximum value
-        maximums_list.append([-x_max, y_max, np.max(correlation_list[i])])
+        maximums_list.append([x_max, y_max, np.max(correlation_list[i])])
 
     # Create vector field
     vector_field = []
 
-    return vector_field
+    return np.array(list_of_coords), np.array(maximums_list)
