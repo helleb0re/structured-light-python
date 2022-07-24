@@ -181,6 +181,81 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
     return phases, unwrapped_phases, avg_ints, mod_ints
 
 
+def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int) -> tuple[float, float]:
+    '''
+    Finds the corresponding point coordinates for the second image using the phasogrammetry approach 
+
+    For the given coordinates x and y, the phase values on the fields for the vertical and horizontal fringes 
+    for the images of the first camera are determined. Then two isolines with defined values of the phase on 
+    the corresponding fields for the second camera are found. The intersection of the isolines gives the 
+    coordinates of the corresponding point on the image from the second camera.
+
+    Args:
+        p1_h (numpy array): phase field for horizontal fringes for first camera
+        p1_v (numpy array): phase field for vertical fringes for first camera
+        p2_h (numpy array): phase field for horizontal fringes for second camera
+        p2_v (numpy array): phase field for vertical fringes for second camera
+        x (int): horizontal coordinate of point for first camera
+        y (int): vertical coordinate of point for first camera
+
+    Returns:
+        x2, y2 (tuple[float, float]): horizontal and vertical coordinate of corresponding point for second camera
+    '''
+    # Determine the phase values on vertical and horizontal phase fields 
+    phase_h = p1_h[y, x]
+    phase_v = p1_v[y, x]
+
+    # Find coords of isophase curves
+    y_h, x_h = np.where(np.isclose(p2_h, phase_h, atol=10**-1))
+    y_v, x_v = np.where(np.isclose(p2_v, phase_v, atol=10**-1))
+
+    # A faster way to calculate using a flatten array 
+    # _, yx_h = np.unravel_index(np.where(np.isclose(p2_h, p1_h[y, x], atol=10**-1)), p2_h.shape)
+    # _, yx_v = np.unravel_index(np.where(np.isclose(p2_v, p1_v[y, x], atol=10**-1)), p2_v.shape)
+
+    # Find ROI of coords for intersection
+    y_h_min = np.min(y_h)
+    y_h_max = np.max(y_h)
+    x_v_min = np.min(x_v)
+    x_v_max = np.max(x_v)
+
+    # Apply ROI for coords of isophase curves
+    y_h = y_h[(x_h >= x_v_min) & (x_h <= x_v_max)]
+    x_h = x_h[(x_h >= x_v_min) & (x_h <= x_v_max)]
+    x_v = x_v[(y_v >= y_h_min) & (y_v <= y_h_max)]
+    y_v = y_v[(y_v >= y_h_min) & (y_v <= y_h_max)]
+
+    # Break if too much points in isophase line
+    if len(y_h) > 500 or len(y_v) > 500:
+        return -1, -1
+
+    # Break if no points found
+    if x_h.size == 0 or x_v.size == 0:
+        return -1, -1
+
+    # Reshape coords to use broadcasting
+    x_h = x_h[:, np.newaxis]
+    y_h = y_h[:, np.newaxis]
+    y_v = y_v[np.newaxis, :]
+    x_v = x_v[np.newaxis, :]
+
+    # Calculate distance between points in coords
+    distance = np.sqrt((x_h - x_v)**2 + (y_h - y_v)**2)
+
+    # Find indicies of minimum distance
+    i_h_min, i_v_min = np.where(distance == distance.min())
+    i_v_min = i_v_min[0]
+    i_h_min = i_h_min[0]
+
+    # A faster way to calculate using a flatten array 
+    # i_h_min, i_v_min = np.unravel_index(np.where(distance.ravel()==distance.min()), distance.shape)
+    # i_v_min = i_v_min[0][0]
+    # i_h_min = i_h_min[0][0]
+
+    x2, y2 = ((x_v[0, i_v_min] + x_h[i_h_min, 0]) / 2, (y_v[0, i_v_min] + y_h[i_h_min, 0]) / 2)
+    return x2, y2
+
+
 def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_size_x: int, win_size_y: int, step_x: int, step_y: int) -> np. ndarray:
     '''
     Calculate displacement field between two scalar fields thru correlation.
