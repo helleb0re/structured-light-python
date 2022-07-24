@@ -181,6 +181,56 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
     return phases, unwrapped_phases, avg_ints, mod_ints
 
 
+def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_edges: bool = True) -> bool:
+    '''
+    Test if point (x,y) is inside polygon poly
+
+    Point is inside polygon if horisontal beam to the right
+    from point crosses polygon even number of times. Works fine for non-convex polygons.
+
+    Args:
+        x (int): horizontal point coordinate
+        y (int): vertical point coordinate
+        poly (list[tuple(int, int)]): N-vertices polygon defined as [(x1,y1),...,(xN,yN)] or [(x1,y1),...,(xN,yN),(x1,y1)]
+
+    Returns:
+        inside (bool): if point inside the polygon
+    '''
+    n = len(poly)
+
+    inside = False
+
+    p1x, p1y = poly[0]
+
+    for i in range(1, n + 1):
+        p2x, p2y = poly[i % n]
+        if p1y == p2y:
+            if y == p1y:
+                if min(p1x, p2x) <= x <= max(p1x, p2x):
+                    # point is on horisontal edge
+                    inside = include_edges
+                    break
+                # point is to the left from current edge
+                elif x < min(p1x, p2x):  
+                    inside = not inside
+        else:  # p1y!= p2y
+            if min(p1y, p2y) <= y <= max(p1y, p2y):
+                xinters = (y - p1y) * (p2x - p1x) / float(p2y - p1y) + p1x
+
+                # point is right on the edge
+                if x == xinters:  
+                    inside = include_edges
+                    break
+                
+                # point is to the left from current edge
+                if x < xinters:  
+                    inside = not inside
+
+        p1x, p1y = p2x, p2y
+
+    return inside
+
+
 def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int) -> tuple[float, float]:
     '''
     Finds the corresponding point coordinates for the second image using the phasogrammetry approach 
@@ -254,6 +304,127 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
 
     x2, y2 = ((x_v[0, i_v_min] + x_h[i_h_min, 0]) / 2, (y_v[0, i_v_min] + y_h[i_h_min, 0]) / 2)
     return x2, y2
+
+
+def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict) -> tuple[np.ndarray]:
+    '''
+    Find 3D point cloud with phasogrammetry approach 
+
+    Args:
+        fppmeasurements_h (list of FPPMeasurement): list of FPPMeasurements instances with horizontal fringes
+        fppmeasurements_v (list of FPPMeasurement): list of FPPMeasurements instances with vertical fringes
+        calibration_data (dict): dict of calibration data for stereo cameras system
+    Returns:
+        points_3d (numpy aaray): 3D point cloud
+        rms1 (float): reprojection error for first camera
+        rms2 (float): reprojection error for second camera
+    '''
+    # TODO: Remove the phase calculation code
+    # Calculate phase fields
+    print('Calculate phase fields for first camera...', end='')
+    _, unwrapped_phases1_h, _, _ = calculate_phase_for_fppmeasurement(measurements_h[0])
+    _, unwrapped_phases2_h, _, _ = calculate_phase_for_fppmeasurement(measurements_h[1])
+    print('Done')
+    print('Calcalute phase fields for second camera...', end='')
+    _, unwrapped_phases1_v, _, _ = calculate_phase_for_fppmeasurement(measurements_v[0])
+    _, unwrapped_phases2_v, _, _ = calculate_phase_for_fppmeasurement(measurements_v[1])
+    print('Done')
+
+    # Take phases with highest frequencies 
+    p1_h = unwrapped_phases1_h[-1]
+    p2_h = unwrapped_phases2_h[-1]
+
+    p1_v = unwrapped_phases1_v[-1]
+    p2_v = unwrapped_phases2_v[-1]
+
+    # TODO: Automatic ROI detection
+    # Сoordinates of the corners of the rectangle to set the ROI processing
+    srcTri = np.array([[205, 427], [1754, 238], [1777, 1297], [132, 1308]], dtype = "float32")
+    dstTri = np.array([[116, 159], [1890, 284], [1967, 1258], [53, 1243]], dtype = "float32")
+
+    # Cut ROI from phase fields for second camera
+    ROIx = slice(int(np.min(dstTri[:,0])), int(np.max(dstTri[:,0])))
+    ROIy = slice(int(np.min(dstTri[:,1])), int(np.max(dstTri[:,1])))
+
+    # p1_h = p1_h[ROIy][ROIx]
+    # p1_v = p1_v[ROIy][ROIx]
+    p2_h = p2_h[ROIy, ROIx]
+    p2_v = p2_v[ROIy, ROIx]
+
+    # Calculation of the coordinate grid on first image
+    xx = np.arange(0, p1_h.shape[1], 50, dtype=np.int32)
+    yy = np.arange(0, p1_h.shape[0], 50, dtype=np.int32)
+
+    coords1 = []
+
+    for y in yy:
+        for x in xx:
+            # Check if coordinate in ROI rectangle
+            if point_inside_polygon(x, y, srcTri):
+                coords1.append((x, y))
+
+    coords2 = []
+
+    print(f'Start calculating phase correlation for {len(coords1)} points')
+
+    coords_to_delete = []
+
+    for i in range(len(coords1)):
+        # Find corresponding point coordinate on second image
+        x, y = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1])
+        # If no point found, delete coordinate from grid
+        if x == -1 and y == -1:
+            coords_to_delete.append(i)
+        else:
+            coords2.append((x + ROIx.start, y + ROIy.start))
+        print(f'Found {i+1} from {len(coords1)} points')
+
+    # Delete point in grid with no coresponding point on second image
+    for index in reversed(coords_to_delete):
+        coords1.pop(index)
+
+    coords1 = np.array(coords1)
+    coords2 = np.array(coords2)
+
+    # Form a set of coordinates of corresponding points on the first and second images
+    image1_points = []
+    image2_points = []
+
+    for point1, point2 in zip(coords1, coords2):
+        image1_points.append([point1[0], point1[1]]) 
+        image2_points.append([point2[0], point2[1]])
+        
+    print(f'Start triangulating points...')
+
+    # TODO: Extract triangulation into a separate method
+    # Calculate the projective matrices according to the stereo calibration data
+    proj_mtx_1 = np.dot(calibration_data['camera_0']['mtx'], np.hstack((np.identity(3), np.zeros((3,1)))))
+    proj_mtx_2 = np.dot(calibration_data['camera_1']['mtx'], np.hstack((calibration_data['R'], calibration_data['T'])))
+
+    # Calculate the triangulation of 3D points
+    image_points_nparray = np.array(image1_points, dtype=float).T
+    image_points_nparray2 = np.array(image2_points, dtype=float).T
+    points_hom = cv2.triangulatePoints(proj_mtx_1, proj_mtx_2, image_points_nparray, image_points_nparray2)
+    points_3d = cv2.convertPointsFromHomogeneous(points_hom.T)
+
+    # Reproject triangulated points
+    reproj_points, _ = cv2.projectPoints(points_3d, np.identity(3), np.zeros((3,1)),
+                                                np.array(calibration_data['camera_0']['mtx']), np.array(calibration_data['camera_0']['dist']))
+
+    reproj_points2, _ = cv2.projectPoints(points_3d, np.array(calibration_data['R']), np.array(calibration_data['T']),
+                                                np.array(calibration_data['camera_1']['mtx']), np.array(calibration_data['camera_1']['dist']))
+
+    # Calculate reprojection error
+    tot_error = 0
+    tot_error += np.sum(np.square(np.float64(image_points_nparray - reproj_points[:,0,:].T)))
+    rms1 = np.sqrt(tot_error/len(reproj_points))
+    print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
+    tot_error = 0
+    tot_error += np.sum(np.square(np.float64(image_points_nparray2 - reproj_points2[:,0,:].T)))
+    rms2 = np.sqrt(tot_error/len(reproj_points))
+    print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
+ 
+    return points_3d, rms1, rms2
 
 
 def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_size_x: int, win_size_y: int, step_x: int, step_y: int) -> np. ndarray:
