@@ -370,8 +370,8 @@ if __name__ == '__main__':
 
         elif (choice == 4):
             measurements = capture_measurement_images(cameras, projector)
-            w_phases_1, uw_phases_1 = calculate_phase_for_fppmeasurement(measurements[0])
-            w_phases_2, uw_phases_2 = calculate_phase_for_fppmeasurement(measurements[1])
+            w_phases_1, uw_phases_1, _, _ = calculate_phase_for_fppmeasurement(measurements[0])
+            w_phases_2, uw_phases_2, _, _ = calculate_phase_for_fppmeasurement(measurements[1])
 
             for w_phase_1, uw_phase_1, w_phase_2, uw_phase_2 in zip(
                 w_phases_1, uw_phases_1, w_phases_2, uw_phases_2):
