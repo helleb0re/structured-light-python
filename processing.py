@@ -1,15 +1,15 @@
 '''Module to process FPP images'''
 
 from __future__ import annotations
-from dataclasses import field
-
+import multiprocessing
 from typing import Optional
+from multiprocessing import Pool
 
 import cv2
 import numpy as np
 from scipy import signal
 
-from create_patterns import *
+import config
 from fpp_structures import FPPMeasurement 
 
 
@@ -369,19 +369,37 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
 
     coords_to_delete = []
 
-    for i in range(len(coords1)):
-        # Find corresponding point coordinate on second image
-        x, y = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1])
-        # If no point found, delete coordinate from grid
-        if x == -1 and y == -1:
-            coords_to_delete.append(i)
-        else:
-            coords2.append((x + ROIx.start, y + ROIy.start))
-        print(f'Found {i+1} from {len(coords1)} points')
+    if config.USE_MULTIPROCESSING:
+        # Use parallel calaculation to increase processing speed 
+        with multiprocessing.Pool(6) as p:
+            coords2 = p.starmap(find_phasogrammetry_corresponding_point, [(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1]) for i in range(len(coords1))])
 
-    # Delete point in grid with no coresponding point on second image
-    for index in reversed(coords_to_delete):
-        coords1.pop(index)
+        # Search for corresponding points not found
+        for i in range(len(coords2)):
+            if coords2[i][0] < 0 and coords2[i][1] < 0:
+                coords_to_delete.append(i)
+            else:
+                # Add ROI left and top coordinates
+                coords2[i] = (coords2[i][0] + ROIx.start, coords2[i][1] + ROIy.start)
+
+        # If no point found, delete coordinate from grid
+        for index in reversed(coords_to_delete):
+            coords1.pop(index)
+            coords2.pop(index)
+    else:
+        for i in range(len(coords1)):
+            # Find corresponding point coordinate on second image
+            x, y = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1])
+            # If no point found, delete coordinate from grid
+            if x == -1 and y == -1:
+                coords_to_delete.append(i)
+            else:
+                coords2.append((x + ROIx.start, y + ROIy.start))
+            print(f'Found {i+1} from {len(coords1)} points')
+
+        # Delete point in grid with no coresponding point on second image
+        for index in reversed(coords_to_delete):
+            coords1.pop(index)
 
     coords1 = np.array(coords1)
     coords2 = np.array(coords2)

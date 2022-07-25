@@ -56,6 +56,13 @@ MEASUREMENT_CAPTURE_DELAY = 300 # ms
 # File name for calibration data
 CONFIG_FILENAME = r'./config.json'
 
+# Use multiprocessing to increase speed of processing
+USE_MULTIPROCESSING = False
+
+# Number of Pools to use in parallel processing
+POOLS_NUMBER = 4
+
+
 # Load calibration data from json file
 try:
     with open('config.json') as f:
@@ -82,6 +89,7 @@ try:
             pass
 except:
     pass
+
 
 def save_calibration_data() -> None:
     '''
