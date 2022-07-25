@@ -259,6 +259,10 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     y_h, x_h = np.where(np.isclose(p2_h, phase_h, atol=10**-1))
     y_v, x_v = np.where(np.isclose(p2_v, phase_v, atol=10**-1))
 
+    # Break if isoline not found
+    if y_h.size == 0 or y_v.size == 0:
+        return -1, -1
+
     # A faster way to calculate using a flatten array 
     # _, yx_h = np.unravel_index(np.where(np.isclose(p2_h, p1_h[y, x], atol=10**-1)), p2_h.shape)
     # _, yx_v = np.unravel_index(np.where(np.isclose(p2_v, p1_v[y, x], atol=10**-1)), p2_v.shape)
@@ -339,7 +343,7 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
 
     # TODO: Automatic ROI detection
     # Сoordinates of the corners of the rectangle to set the ROI processing
-    srcTri = np.array([[205, 427], [1754, 238], [1777, 1297], [132, 1308]], dtype = "float32")
+    srcTri = np.array([[125, 326], [1900, 387], [2000, 1389], [110, 1433]], dtype = "float32")
     dstTri = np.array([[116, 159], [1890, 284], [1967, 1258], [53, 1243]], dtype = "float32")
 
     # Cut ROI from phase fields for second camera
@@ -371,7 +375,7 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
 
     if config.USE_MULTIPROCESSING:
         # Use parallel calaculation to increase processing speed 
-        with multiprocessing.Pool(6) as p:
+        with multiprocessing.Pool(config.POOLS_NUMBER) as p:
             coords2 = p.starmap(find_phasogrammetry_corresponding_point, [(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1]) for i in range(len(coords1))])
 
         # Search for corresponding points not found

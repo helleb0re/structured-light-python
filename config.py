@@ -11,7 +11,7 @@ import json
 PROJECTOR_WIDTH = 1280
 PROJECTOR_HEIGHT = 720
 # OpenCV GUI windows shift relative to first screen of the system
-PROJECTOR_WINDOW_SHIFT = 0
+PROJECTOR_WINDOW_SHIFT = 1920
 
 # Maximum and minimum brightness for projected image correction
 # Given values are default, the current values are loaded from the calibration file
@@ -59,10 +59,10 @@ MEASUREMENT_CAPTURE_DELAY = 300 # ms
 CONFIG_FILENAME = r'./config.json'
 
 # Use multiprocessing to increase speed of processing
-USE_MULTIPROCESSING = False
+USE_MULTIPROCESSING = True
 
 # Number of Pools to use in parallel processing
-POOLS_NUMBER = 4
+POOLS_NUMBER = 5
 
 
 # Load calibration data from json file
