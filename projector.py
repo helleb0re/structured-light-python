@@ -26,7 +26,7 @@ class Projector():
         cv2.setWindowProperty('Projector window', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
         # TODO: remove magic number 1920 with screen resolution for multimonitor case
         # https://stackoverflow.com/questions/3129322/how-do-i-get-monitor-resolution-in-python
-        cv2.moveWindow('Projector window', 1920, 0)
+        cv2.moveWindow('Projector window', config.PROJECTOR_WINDOW_SHIFT, 0)
         self.window_exist = True
 
     def project_pattern(self, pattern: np.ndarray, correction: bool = True) -> None:

@@ -10,6 +10,8 @@ import json
 # Projector resolution width and height in pixels
 PROJECTOR_WIDTH = 1280
 PROJECTOR_HEIGHT = 720
+# OpenCV GUI windows shift relative to first screen of the system
+PROJECTOR_WINDOW_SHIFT = 0
 
 # Maximum and minimum brightness for projected image correction
 # Given values are default, the current values are loaded from the calibration file
@@ -18,7 +20,7 @@ PROJECTOR_MAX_BRIGHTNESS = 1.0
 
 # Gamma correction coefficients for formula Iout = a * (Iin + c) ^ b
 # Given values are default, the current values are loaded from the calibration file
-PROJECTOR_GAMMA_A = 255
+PROJECTOR_GAMMA_A = 1.0
 PROJECTOR_GAMMA_B = 2.2
 PROJECTOR_GAMMA_C = 0
 
@@ -79,12 +81,12 @@ try:
             pass
         
         try:
-            CAMERA_EXPOSURE = (int(calibration_data['cameras']['baumer'][0]['exposure']),
-                            int(calibration_data['cameras']['baumer'][1]['exposure']))
-            CAMERA_GAIN = (float(calibration_data['cameras']['baumer'][0]['gain']),
-                        float(calibration_data['cameras']['baumer'][1]['gain']))
-            CAMERA_GAMMA = (float(calibration_data['cameras']['baumer'][0]['gamma']),
-                            float(calibration_data['cameras']['baumer'][1]['gamma']))
+            CAMERA_EXPOSURE = [int(calibration_data['cameras']['baumer'][0]['exposure']),
+                               int(calibration_data['cameras']['baumer'][1]['exposure'])]
+            CAMERA_GAIN = [float(calibration_data['cameras']['baumer'][0]['gain']),
+                           float(calibration_data['cameras']['baumer'][1]['gain'])]
+            CAMERA_GAMMA = [float(calibration_data['cameras']['baumer'][0]['gamma']),
+                            float(calibration_data['cameras']['baumer'][1]['gamma'])]
         except:
             pass
 except:

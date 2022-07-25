@@ -305,13 +305,13 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector) -> t
         frequencies,
         phase_shifts, 
         filenames1 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
-        None if config.SAVE_MEASUREMENT_IMAGE_FILES else images1
+        imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images1
     )
     meas2 = FPPMeasurement(
         frequencies,
         phase_shifts,
         filenames2 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
-        None if config.SAVE_MEASUREMENT_IMAGE_FILES else images2
+        imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images2
     )
 
     # Save results of measurement in json file if defined in config
