@@ -304,14 +304,16 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
     # Create FPPMeasurement instances with results
     meas1 = FPPMeasurement(
         frequencies,
-        phase_shifts, 
+        phase_shifts,
         filenames1 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
+        'vertical' if vertical else 'horizontal', 
         imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images1
     )
     meas2 = FPPMeasurement(
         frequencies,
         phase_shifts,
         filenames2 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
+        'vertical' if vertical else 'horizontal', 
         imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images2
     )
 

@@ -43,7 +43,7 @@ class Projector():
         
         # Correct image with calibration coefficients
         if correction:
-            self._corrected_pattern = self.image_brightness_rescale_factor * ((pattern / config.PROJECTOR_GAMMA_A) ** (1 / config.PROJECTOR_GAMMA_B) - config.PROJECTOR_GAMMA_C) + self.min_image_brightness
+            self._corrected_pattern = self.image_brightness_rescale_factor * ((pattern / config.PROJECTOR_GAMMA_A) ** (1 / config.PROJECTOR_GAMMA_B)) + self.min_image_brightness
         else:
             self._corrected_pattern = pattern
         # Show image at OpenCV GUI window
