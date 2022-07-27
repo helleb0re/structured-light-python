@@ -71,8 +71,11 @@ def load_fpp_measurements(file: str) -> list[FPPMeasurement]:
         measurement = FPPMeasurement(
             shifts = instance['shifts'],
             frequencies = instance['frequencies'],
-            imgs_file_names = instance['imgs_file_names'],
+            fringe_orientation = instance['fringe_orientation'],
+            
         )
+
+        measurement.imgs_file_names = instance['imgs_file_names']
 
         measurements.append(measurement)
 
