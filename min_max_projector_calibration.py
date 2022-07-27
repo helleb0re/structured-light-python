@@ -106,14 +106,17 @@ def MinMaxProjectorCalibration(patterns, cameras, projector):
         if cameras[1].type == 'web':
             frame_2 = cv2.cvtColor(frame_2, cv2.COLOR_BGR2GRAY)
         
+        delta_height = 25
+        ROI = slice(int(frame_1.shape[0] / 2 - delta_height), int(frame_1.shape[0] / 2 + delta_height))
+
         a1 = f.add_subplot(221)
-        a1.plot(frame_1[520, :])
+        a1.plot(np.mean(frame_1[ROI, :], axis=0))
         a1.set_ylim((0, 255))
         b1 = f.add_subplot(222)
         b1.imshow(frame_1)
 
         a2 = f.add_subplot(223)
-        a2.plot(frame_2[520, :])
+        a2.plot(np.mean(frame_2[ROI, :], axis=0))
         a2.set_ylim((0, 255))
         b2 = f.add_subplot(224)
         b2.imshow(frame_2)
