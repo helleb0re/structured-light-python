@@ -1,9 +1,10 @@
 '''Module to store FPP data structures'''
 
 from __future__ import annotations
-from dataclasses import dataclass, field
-import numpy as np
 from typing import Optional
+from dataclasses import dataclass, field
+
+import numpy as np
 
 
 @dataclass
@@ -11,9 +12,14 @@ class FPPMeasurement:
     '''Class to store FPP measurement data'''
     frequencies: list[float]
     shifts: list[float]
-    imgs_file_names: list[list[str]]
+    imgs_file_names: list[list[str]] = field(init=False)
+    phases: Optional[list[np.ndarray]] = field(init=False)
+    unwrapped_phases: Optional[list[np.ndarray]] = field(init=False)
+    average_intensities: Optional[list[np.ndarray]] = field(init=False)
+    modulated_intensities: Optional[list[np.ndarray]] = field(init=False)
+    modulation_mask: Optional[np.ndarray] = field(init=False)
     fringe_orientation: Optional[str] = 'vertical'
-    imgs_list: Optional[list[list[np.array]]] = None
+    imgs_list: Optional[list[list[np.ndarray]]] = None
 
     @property
     def frequency_counts(self) -> int:
