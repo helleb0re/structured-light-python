@@ -130,7 +130,7 @@ def load_image(path: str) -> np.ndarray:
     return image
 
 
-def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[list[np.ndarray], list[np.ndarray]]:
+def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> FPPMeasurement:
     '''
     Calculate unwrapped phase for FPP measurement instance with the help
     of calculate_phase_generic and calculate_unwraped_phase functions    
@@ -139,8 +139,8 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
         measurement (FPPMeasurement): FPP measurement instance
 
     Returns:
-        phases (List of 2D numpy array): wrapped phases
-        unwrapped_phases (List of 2D numpy array): unwrapped phase
+        measurement (FPPMeasurement): FPP measurement instance with calculated
+        wrapped and unwrapped phases, average and modulated intensities, and processing mask
     '''
     # Load measurement data
     shifts_count = measurement.shifts_count
@@ -177,8 +177,14 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> tuple[lis
         else:
             unwrapped_phase = calculate_unwraped_phase(unwrapped_phases[i-1], phases[i], 1 / frequencies[i-1], 1 / frequencies[i])
             unwrapped_phases.append(unwrapped_phase)
+
+    measurement.phases = phases
+    measurement.unwrapped_phases = unwrapped_phases
+    measurement.average_intensities = avg_ints
+    measurement.modulated_intensities = mod_ints
+    measurement.modulation_mask = mask
     
-    return phases, unwrapped_phases, avg_ints, mod_ints
+    return measurement
 
 
 def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_edges: bool = True) -> bool:
@@ -326,25 +332,28 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     # TODO: Remove the phase calculation code
     # Calculate phase fields
     print('Calculate phase fields for first camera...', end='')
-    _, unwrapped_phases1_h, _, _ = calculate_phase_for_fppmeasurement(measurements_h[0])
-    _, unwrapped_phases2_h, _, _ = calculate_phase_for_fppmeasurement(measurements_h[1])
+    measurements_h[0] = calculate_phase_for_fppmeasurement(measurements_h[0])
+    measurements_h[1] = calculate_phase_for_fppmeasurement(measurements_h[1])
     print('Done')
     print('Calcalute phase fields for second camera...', end='')
-    _, unwrapped_phases1_v, _, _ = calculate_phase_for_fppmeasurement(measurements_v[0])
-    _, unwrapped_phases2_v, _, _ = calculate_phase_for_fppmeasurement(measurements_v[1])
+    measurements_v[0] = calculate_phase_for_fppmeasurement(measurements_v[0])
+    measurements_v[1] = calculate_phase_for_fppmeasurement(measurements_v[1])
     print('Done')
 
     # Take phases with highest frequencies 
-    p1_h = unwrapped_phases1_h[-1]
-    p2_h = unwrapped_phases2_h[-1]
+    p1_h = measurements_h[0].unwrapped_phases[-1]
+    p2_h = measurements_h[1].unwrapped_phases[-1]
 
-    p1_v = unwrapped_phases1_v[-1]
-    p2_v = unwrapped_phases2_v[-1]
+    p1_v = measurements_v[0].unwrapped_phases[-1]
+    p2_v = measurements_v[1].unwrapped_phases[-1]
 
-    # TODO: Automatic ROI detection
-    # Сoordinates of the corners of the rectangle to set the ROI processing
-    srcTri = np.array([[125, 326], [1900, 387], [2000, 1389], [110, 1433]], dtype = "float32")
-    dstTri = np.array([[116, 159], [1890, 284], [1967, 1258], [53, 1243]], dtype = "float32")
+    # # TODO: Automatic ROI detection
+    # # Сoordinates of the corners of the rectangle to set the ROI processing
+    # srcTri = np.array([[125, 326], [1900, 387], [2000, 1389], [110, 1433]], dtype = "float32")
+    dstTri = np.array([[167, 451], [1904, 286], [1944, 1429], [118, 1395]], dtype = "float32")
+
+    # mask = measurements_h[1].modulation_mask
+    # mask_coords = np.argwhere(mask == 1)
 
     # Cut ROI from phase fields for second camera
     ROIx = slice(int(np.min(dstTri[:,0])), int(np.max(dstTri[:,0])))
@@ -364,7 +373,7 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     for y in yy:
         for x in xx:
             # Check if coordinate in ROI rectangle
-            if point_inside_polygon(x, y, srcTri):
+            if measurements_h[0].modulation_mask[y, x] == 1:
                 coords1.append((x, y))
 
     coords2 = []

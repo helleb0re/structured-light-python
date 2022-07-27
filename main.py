@@ -320,7 +320,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
         with open(f'{config.DATA_PATH}/{measure_name}/' + config.MEASUREMENT_FILENAME_MASK.format(measure_name), 'x') as f:
             json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
 
-    return meas1, meas2
+    return [meas1, meas2]
 
 
 if __name__ == '__main__':
