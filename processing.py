@@ -130,17 +130,14 @@ def load_image(path: str) -> np.ndarray:
     return image
 
 
-def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> FPPMeasurement:
+def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
     '''
     Calculate unwrapped phase for FPP measurement instance with the help
-    of calculate_phase_generic and calculate_unwraped_phase functions    
+    of calculate_phase_generic and calculate_unwraped_phase functions.    
+    Calculated phase fields will be stored in input measurement argument.
 
     Args:
         measurement (FPPMeasurement): FPP measurement instance
-
-    Returns:
-        measurement (FPPMeasurement): FPP measurement instance with calculated
-        wrapped and unwrapped phases, average and modulated intensities, and processing mask
     '''
     # Load measurement data
     shifts_count = measurement.shifts_count
@@ -184,8 +181,6 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement) -> FPPMeasur
     measurement.modulated_intensities = mod_ints
     measurement.modulation_mask = mask
     
-    return measurement
-
 
 def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_edges: bool = True) -> bool:
     '''
@@ -235,6 +230,58 @@ def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_e
         p1x, p1y = p2x, p2y
 
     return inside
+
+
+def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2_points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+    '''
+    Triangulate two set of 2D point in one set of 3D points
+
+    Args:
+        calibration_data (dictionary): calibration data used for triangulating
+        image1_points (numpy arrray): first set of 2D points
+        image2_points (numpy arrray): second set of 2D points
+    Returns:
+        points_3d (numpy arrray): triangulated 3D points
+        undist_points_2d_1 (numpy arrray): undistorted 2D points for first set
+        undist_points_2d_2 (numpy arrray): undistorted 2D points for second set
+        rms1, rms2 (float): RMS error for reprojected points for first and second set of points
+    '''
+    # Calculate the projective matrices according to the stereo calibration data
+    cam1_mtx = np.array(calibration_data['camera_0']['mtx'])
+    cam2_mtx = np.array(calibration_data['camera_1']['mtx'])
+    dist1_mtx = np.array(calibration_data['camera_0']['dist'])
+    dist2_mtx = np.array(calibration_data['camera_1']['dist'])
+
+    # Calculate projective matrices for cameras
+    proj_mtx_1 = np.dot(cam1_mtx, np.hstack((np.identity(3), np.zeros((3,1)))))
+    proj_mtx_2 = np.dot(cam2_mtx, np.hstack((calibration_data['R'], calibration_data['T'])))
+
+    # Undistort 2d points
+    undist_points_2d_1 = np.array(image1_points, dtype=np.float32)
+    undist_points_2d_2 = np.array(image2_points, dtype=np.float32)
+    undist_points_2d_1 = cv2.undistortPoints(undist_points_2d_1, cam1_mtx, dist1_mtx, P=cam1_mtx)
+    undist_points_2d_2 = cv2.undistortPoints(undist_points_2d_2, cam2_mtx, dist2_mtx, P=cam2_mtx)
+
+    # Calculate the triangulation of 3D points
+    points_hom = cv2.triangulatePoints(proj_mtx_1, proj_mtx_2, undist_points_2d_1, undist_points_2d_2)
+    points_3d = cv2.convertPointsFromHomogeneous(points_hom.T)
+
+    # Reproject triangulated points
+    reproj_points, _ = cv2.projectPoints(points_3d, np.identity(3), np.zeros((3,1)), cam1_mtx, dist1_mtx)
+
+    reproj_points2, _ = cv2.projectPoints(points_3d, np.array(calibration_data['R']), np.array(calibration_data['T']), cam2_mtx, dist2_mtx)
+
+    # Calculate reprojection error
+    tot_error = 0
+    tot_error += np.sum(np.square(np.float64(undist_points_2d_1 - reproj_points)))
+    rms1 = np.sqrt(tot_error/len(reproj_points))
+    print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
+    tot_error = 0
+    tot_error += np.sum(np.square(np.float64(undist_points_2d_2 - reproj_points2)))
+    rms2 = np.sqrt(tot_error/len(reproj_points))
+    print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
+    
+    return points_3d, undist_points_2d_1, undist_points_2d_2, rms1, rms2
 
 
 def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int) -> tuple[float, float]:
@@ -316,7 +363,80 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     return x2, y2
 
 
-def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict) -> tuple[np.ndarray]:
+def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int, window_size: int) -> np.ndarray:
+    '''
+    Calculate correlation function for horizontal and vertical phase fields
+
+    Args:
+        p1_h (numpy array): phase field for horizontal fringes for first camera
+        p1_v (numpy array): phase field for vertical fringes for first camera
+        p2_h (numpy array): phase field for horizontal fringes for second camera
+        p2_v (numpy array): phase field for vertical fringes for second camera
+        x (int): horizontal coordinate of point for first camera
+        y (int): vertical coordinate of point for first camera
+        window_size (int): size of window to calculate correlation function
+
+    Returns:
+        corelation_field (numpy array): calculated correlation field
+    '''
+    p1_h_ij = p1_h[y - window_size//2:y + window_size//2, x - window_size//2:x + window_size//2]
+    p1_v_ij = p1_v[y - window_size//2:y + window_size//2, x - window_size//2:x + window_size//2]
+    p1_h_m = np.mean(p1_h_ij)
+    p1_v_m = np.mean(p1_v_ij)
+
+    corelation_field = np.zeros((window_size, window_size))
+
+    xx = np.linspace(x - window_size // 2, x + window_size // 2, window_size)
+    yy = np.linspace(y - window_size // 2, y + window_size // 2, window_size)
+
+    for j in range(yy.shape[0]):
+        for i in range(xx.shape[0]):
+            x0 = xx[i]
+            y0 = yy[j]
+            p2_h_ij = p2_h[y0 - window_size //2:y0 + window_size //2, x0 - window_size//2:x0 + window_size//2]
+            p2_v_ij = p2_v[y0 - window_size //2:y0 + window_size //2, x0 - window_size//2:x0 + window_size//2]
+            p2_h_m = np.mean(p2_h_ij)
+            p2_v_m = np.mean(p2_v_ij)
+            t1_h = (p1_h_ij - p1_h_m) ** 2
+            t1_v = (p1_v_ij - p1_v_m) ** 2
+            t2_h = (p2_h_ij - p2_h_m) ** 2
+            t2_v = (p2_v_ij - p2_v_m) ** 2
+
+            if p2_h_ij.size == p1_h_ij.size and p2_v_ij.size == p1_v_ij.size:
+                t = np.sum(t1_h * t1_v * t2_h * t2_v) / np.sqrt(np.sum(t1_h * t1_v) * np.sum(t2_h * t2_v))
+                if t < 1:
+                    corelation_field[j, i] = t
+
+    return corelation_field
+
+
+def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshold: float = 0.25):
+    '''
+    Get ROI for FPP measurement with the help of signal to noise thresholding.
+    ROI Represents a quadrangle defined by four points made up of the minimum and maximum x and y coordinates 
+    for points in the phase field whose value is higher than a specified threshold.
+    Calculated ROI will be stored in input measurement argument.
+
+    Args:
+        fpp_measurement (FPPMeasurement): FPP measurment for calcaulating ROI
+        signal_to_nose_threshold (float) = 0.25: threshold for signal to noise ratio to calcaulate ROI
+    '''
+    # Calculate signal to noise ratio
+    signal_to_nose = fpp_measurement.modulated_intensities[-1] / fpp_measurement.average_intensities[-1]
+    # Threshold signal to noise with defined threshold level
+    thresholded_coords = np.argwhere(signal_to_nose > signal_to_nose_threshold)
+    
+    # Determine four points around thresholded area
+    x_min = np.min(thresholded_coords[:,1])
+    x_max = np.max(thresholded_coords[:,1])
+    y_min = np.min(thresholded_coords[:,0])
+    y_max = np.max(thresholded_coords[:,0])
+    
+    # Store determined ROI
+    fpp_measurement.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
+
+
+def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
     '''
     Find 3D point cloud with phasogrammetry approach 
 
@@ -326,20 +446,11 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
         calibration_data (dict): dict of calibration data for stereo cameras system
     Returns:
         points_3d (numpy aaray): 3D point cloud
+        points_2d_1 (numpy array): 2D points from first camera
+        points_2d_2 (numpy array): 2D points from second camera
         rms1 (float): reprojection error for first camera
         rms2 (float): reprojection error for second camera
     '''
-    # TODO: Remove the phase calculation code
-    # Calculate phase fields
-    print('Calculate phase fields for first camera...', end='')
-    measurements_h[0] = calculate_phase_for_fppmeasurement(measurements_h[0])
-    measurements_h[1] = calculate_phase_for_fppmeasurement(measurements_h[1])
-    print('Done')
-    print('Calcalute phase fields for second camera...', end='')
-    measurements_v[0] = calculate_phase_for_fppmeasurement(measurements_v[0])
-    measurements_v[1] = calculate_phase_for_fppmeasurement(measurements_v[1])
-    print('Done')
-
     # Take phases with highest frequencies 
     p1_h = measurements_h[0].unwrapped_phases[-1]
     p2_h = measurements_h[1].unwrapped_phases[-1]
@@ -347,17 +458,15 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     p1_v = measurements_v[0].unwrapped_phases[-1]
     p2_v = measurements_v[1].unwrapped_phases[-1]
 
-    # # TODO: Automatic ROI detection
     # # Сoordinates of the corners of the rectangle to set the ROI processing
-    # srcTri = np.array([[125, 326], [1900, 387], [2000, 1389], [110, 1433]], dtype = "float32")
-    dstTri = np.array([[167, 451], [1904, 286], [1944, 1429], [118, 1395]], dtype = "float32")
-
-    # mask = measurements_h[1].modulation_mask
-    # mask_coords = np.argwhere(mask == 1)
+    # ROI1 = np.array([[110, 335], [1861, 397], [1920, 1380], [90, 1446]], dtype = "float32")
+    # ROI2 = np.array([[167, 451], [1904, 286], [1944, 1429], [118, 1395]], dtype = "float32")
+    ROI1 = measurements_h[0].ROI
+    ROI2 = measurements_h[1].ROI
 
     # Cut ROI from phase fields for second camera
-    ROIx = slice(int(np.min(dstTri[:,0])), int(np.max(dstTri[:,0])))
-    ROIy = slice(int(np.min(dstTri[:,1])), int(np.max(dstTri[:,1])))
+    ROIx = slice(int(np.min(ROI2[:,0])), int(np.max(ROI2[:,0])))
+    ROIy = slice(int(np.min(ROI2[:,1])), int(np.max(ROI2[:,1])))
 
     # p1_h = p1_h[ROIy][ROIx]
     # p1_v = p1_v[ROIy][ROIx]
@@ -373,7 +482,8 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     for y in yy:
         for x in xx:
             # Check if coordinate in ROI rectangle
-            if measurements_h[0].modulation_mask[y, x] == 1:
+            # if measurements_h[0].modulation_mask[y, x] == 1:
+            if point_inside_polygon(x, y, ROI1):
                 coords1.append((x, y))
 
     coords2 = []
@@ -427,35 +537,9 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
         
     print(f'Start triangulating points...')
 
-    # TODO: Extract triangulation into a separate method
-    # Calculate the projective matrices according to the stereo calibration data
-    proj_mtx_1 = np.dot(calibration_data['camera_0']['mtx'], np.hstack((np.identity(3), np.zeros((3,1)))))
-    proj_mtx_2 = np.dot(calibration_data['camera_1']['mtx'], np.hstack((calibration_data['R'], calibration_data['T'])))
-
-    # Calculate the triangulation of 3D points
-    image_points_nparray = np.array(image1_points, dtype=float).T
-    image_points_nparray2 = np.array(image2_points, dtype=float).T
-    points_hom = cv2.triangulatePoints(proj_mtx_1, proj_mtx_2, image_points_nparray, image_points_nparray2)
-    points_3d = cv2.convertPointsFromHomogeneous(points_hom.T)
-
-    # Reproject triangulated points
-    reproj_points, _ = cv2.projectPoints(points_3d, np.identity(3), np.zeros((3,1)),
-                                                np.array(calibration_data['camera_0']['mtx']), np.array(calibration_data['camera_0']['dist']))
-
-    reproj_points2, _ = cv2.projectPoints(points_3d, np.array(calibration_data['R']), np.array(calibration_data['T']),
-                                                np.array(calibration_data['camera_1']['mtx']), np.array(calibration_data['camera_1']['dist']))
-
-    # Calculate reprojection error
-    tot_error = 0
-    tot_error += np.sum(np.square(np.float64(image_points_nparray - reproj_points[:,0,:].T)))
-    rms1 = np.sqrt(tot_error/len(reproj_points))
-    print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
-    tot_error = 0
-    tot_error += np.sum(np.square(np.float64(image_points_nparray2 - reproj_points2[:,0,:].T)))
-    rms2 = np.sqrt(tot_error/len(reproj_points))
-    print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
+    points_3d, points_2d_1, points_2d_2, rms1, rms2 = triangulate_points(calibration_data, image1_points, image2_points)
  
-    return points_3d, rms1, rms2
+    return points_3d, points_2d_1, points_2d_2, rms1, rms2
 
 
 def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_size_x: int, win_size_y: int, step_x: int, step_y: int) -> np. ndarray:
