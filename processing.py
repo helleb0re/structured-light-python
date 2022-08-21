@@ -231,14 +231,14 @@ def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_e
     return inside
 
 
-def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2_points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+def triangulate_points(calibration_data: dict, image1_points: list, image2_points: list) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
     '''
     Triangulate two set of 2D point in one set of 3D points
 
     Args:
         calibration_data (dictionary): calibration data used for triangulating
-        image1_points (numpy arrray): first set of 2D points
-        image2_points (numpy arrray): second set of 2D points
+        image1_points (list): first set of 2D points
+        image2_points (list): second set of 2D points
     Returns:
         points_3d (numpy arrray): triangulated 3D points
         undist_points_2d_1 (numpy arrray): undistorted 2D points for first set
@@ -453,37 +453,51 @@ def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshol
     fpp_measurement.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
 
 
-def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FPPMeasurement):
+def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FPPMeasurement) -> list[list[list]]:
     '''
     Get LUT for horizontal and vertical phase field to increase phasogrammetry calculation speed.
+    LUT is a two-dimensional array of coordinates whose indices correspond to the values of horizontal
+    and vertical phase in these coordinates. Knowing the values of the horizontal and vertical phase,
+    you can quickly find the coordinates of points with these values.
+    The LUT is a list of lists of lists of two-dimensional coordinates.
 
     Args:
         fpp_measurement_h (FPPMeasurement): FPP measurment for horizontal fringes
         fpp_measurement_v (FPPMeasurement): FPP measurment for vertical fringes
+    Returns:
+        LUT (list[list[list]]): LUT structure containing the coordinates of points for the horizontal and vertical phase values
     '''
     p_h = fpp_measurement_h.unwrapped_phases[-1]
     p_v = fpp_measurement_v.unwrapped_phases[-1]
 
+    # Find range for horizontal and vertical phase
     ph_max = np.max(p_h)
     ph_min = np.min(p_h)
     pv_max = np.max(p_v)
     pv_min = np.min(p_v)
     h_range = np.arange(ph_min, ph_max)
     v_range = np.arange(pv_min, pv_max)
+
+    # Determine size of LUT structure
     w, h = h_range.shape[0] + 1, v_range.shape[0] + 1
+
+    # Create LUT structure
     LUT = [[[] for x in range(w)] for y in range(h)]
 
     w = p_h.shape[1]
     h = p_h.shape[0]
 
+    # Phase rounding with an offset so that they start from zero  
     p_h_r = np.round(p_h - ph_min).astype(int).tolist()
     p_v_r = np.round(p_v - pv_min).astype(int).tolist()
 
+    # Fill LUT with coordinates of points with horizontal and vertical values as indicies
     for y in range(h):
         for x in range(w):
             if fpp_measurement_h.signal_to_noise_mask[y, x] == 1:
                 LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
-        
+    
+    # Add range of horizontal and vertical phases at the end of LUT
     LUT.append(np.round(h_range).astype(int).tolist())
     LUT.append(np.round(v_range).astype(int).tolist())
 
