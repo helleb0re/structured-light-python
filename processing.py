@@ -273,17 +273,17 @@ def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2
     # Calculate reprojection error
     tot_error = 0
     tot_error += np.sum(np.square(np.float64(undist_points_2d_1 - reproj_points)))
-    rms1 = np.sqrt(tot_error/len(reproj_points))
+    rms1 = np.sqrt(tot_error/reproj_points.shape[0])
     print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
     tot_error = 0
     tot_error += np.sum(np.square(np.float64(undist_points_2d_2 - reproj_points2)))
-    rms2 = np.sqrt(tot_error/len(reproj_points))
+    rms2 = np.sqrt(tot_error/reproj_points.shape[0])
     print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
     
     return points_3d, undist_points_2d_1, undist_points_2d_2, rms1, rms2
 
 
-def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int) -> tuple[float, float]:
+def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int, LUT:list[list[list[int]]]=None) -> tuple[float, float]:
     '''
     Finds the corresponding point coordinates for the second image using the phasogrammetry approach 
 
@@ -306,6 +306,17 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     # Determine the phase values on vertical and horizontal phase fields 
     phase_h = p1_h[y, x]
     phase_v = p1_v[y, x]
+
+    # If LUT available calculate corresponding points with it
+    if LUT is not None:
+        phase_h_index = LUT[-2].index(int(np.round(phase_h)))
+        phase_v_index = LUT[-1].index(int(np.round(phase_v)))
+        cor_points = LUT[phase_v_index][phase_h_index]
+        if len(cor_points) > 0:
+            # Return mean coordinates
+            return np.mean(cor_points, axis=0) 
+        # else:
+        #     return -1, -1
 
     # Find coords of isophase curves
     y_h, x_h = np.where(np.isclose(p2_h, phase_h, atol=10**-1))
@@ -359,6 +370,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     # i_h_min = i_h_min[0][0]
 
     x2, y2 = ((x_v[0, i_v_min] + x_h[i_h_min, 0]) / 2, (y_v[0, i_v_min] + y_h[i_h_min, 0]) / 2)
+
     return x2, y2
 
 
@@ -464,18 +476,21 @@ def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FP
     w = p_h.shape[1]
     h = p_h.shape[0]
 
-    p_h_r = np.round(p_h - ph_min).astype(int)
-    p_v_r = np.round(p_v - pv_min).astype(int)
+    p_h_r = np.round(p_h - ph_min).astype(int).tolist()
+    p_v_r = np.round(p_v - pv_min).astype(int).tolist()
 
     for y in range(h):
         for x in range(w):
             if fpp_measurement_h.signal_to_noise_mask[y, x] == 1:
                 LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
         
+    LUT.append(np.round(h_range).astype(int).tolist())
+    LUT.append(np.round(v_range).astype(int).tolist())
+
     return LUT
 
 
-def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict, LUT:list[list[list[int]]]=None) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
     '''
     Find 3D point cloud with phasogrammetry approach 
 
@@ -504,8 +519,10 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     ROI2 = measurements_h[1].ROI
 
     # Cut ROI from phase fields for second camera
-    ROIx = slice(int(np.min(ROI2[:,0])), int(np.max(ROI2[:,0])))
-    ROIy = slice(int(np.min(ROI2[:,1])), int(np.max(ROI2[:,1])))
+    # ROIx = slice(int(np.min(ROI2[:,0])), int(np.max(ROI2[:,0])))
+    # ROIy = slice(int(np.min(ROI2[:,1])), int(np.max(ROI2[:,1])))
+    ROIx = slice(0, measurements_h[1].unwrapped_phases[-1].shape[1])
+    ROIy = slice(0, measurements_h[1].unwrapped_phases[-1].shape[0])
 
     # p1_h = p1_h[ROIy][ROIx]
     # p1_v = p1_v[ROIy][ROIx]
@@ -513,8 +530,8 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     p2_v = p2_v[ROIy, ROIx]
 
     # Calculation of the coordinate grid on first image
-    xx = np.arange(0, p1_h.shape[1], 50, dtype=np.int32)
-    yy = np.arange(0, p1_h.shape[0], 50, dtype=np.int32)
+    xx = np.arange(0, p1_h.shape[1], 25, dtype=np.int32)
+    yy = np.arange(0, p1_h.shape[0], 25, dtype=np.int32)
 
     coords1 = []
 
@@ -526,14 +543,12 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
 
     coords2 = []
 
-    print(f'Start calculating phase correlation for {len(coords1)} points')
-
     coords_to_delete = []
 
     if config.USE_MULTIPROCESSING:
         # Use parallel calaculation to increase processing speed 
         with multiprocessing.Pool(config.POOLS_NUMBER) as p:
-            coords2 = p.starmap(find_phasogrammetry_corresponding_point, [(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1]) for i in range(len(coords1))])
+            coords2 = p.starmap(find_phasogrammetry_corresponding_point, [(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1], LUT) for i in range(len(coords1))])
 
         # Search for corresponding points not found
         for i in range(len(coords2)):
@@ -550,30 +565,33 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     else:
         for i in range(len(coords1)):
             # Find corresponding point coordinate on second image
-            x, y = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1])
+            x, y = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1], LUT)
             # If no point found, delete coordinate from grid
             if x == -1 and y == -1:
                 coords_to_delete.append(i)
             else:
                 coords2.append((x + ROIx.start, y + ROIy.start))
-            print(f'Found {i+1} from {len(coords1)} points')
 
         # Delete point in grid with no coresponding point on second image
         for index in reversed(coords_to_delete):
             coords1.pop(index)
 
-    coords1 = np.array(coords1)
-    coords2 = np.array(coords2)
-
     # Form a set of coordinates of corresponding points on the first and second images
     image1_points = []
     image2_points = []
+    distance = []
 
     for point1, point2 in zip(coords1, coords2):
         image1_points.append([point1[0], point1[1]]) 
         image2_points.append([point2[0], point2[1]])
-        
-    print(f'Start triangulating points...')
+        distance.append(((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)**0.5)
+
+    # Remove outliers
+    std_d = np.std(distance)
+    indicies_to_delete = [i for i in range(len(distance)) if distance[i] > std_d*3]
+    for index in reversed(indicies_to_delete):
+        image1_points.pop(index)
+        image2_points.pop(index)
 
     points_3d, points_2d_1, points_2d_2, rms1, rms2 = triangulate_points(calibration_data, image1_points, image2_points)
  
