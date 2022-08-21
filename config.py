@@ -59,7 +59,7 @@ MEASUREMENT_CAPTURE_DELAY = 300 # ms
 CONFIG_FILENAME = r'./config.json'
 
 # Use multiprocessing to increase speed of processing
-USE_MULTIPROCESSING = True
+USE_MULTIPROCESSING = False
 
 # Number of Pools to use in parallel processing
 POOLS_NUMBER = 5
