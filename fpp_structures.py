@@ -17,7 +17,7 @@ class FPPMeasurement:
     unwrapped_phases: Optional[list[np.ndarray]] = field(init=False)
     average_intensities: Optional[list[np.ndarray]] = field(init=False)
     modulated_intensities: Optional[list[np.ndarray]] = field(init=False)
-    modulation_mask: Optional[np.ndarray] = field(init=False)
+    signal_to_noise_mask: Optional[np.ndarray] = field(init=False)
     fringe_orientation: Optional[str] = 'vertical'
     imgs_list: Optional[list[list[np.ndarray]]] = None
 

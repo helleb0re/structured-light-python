@@ -179,7 +179,6 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
     measurement.unwrapped_phases = unwrapped_phases
     measurement.average_intensities = avg_ints
     measurement.modulated_intensities = mod_ints
-    measurement.modulation_mask = mask
     
 
 def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_edges: bool = True) -> bool:
@@ -413,9 +412,11 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
 def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshold: float = 0.25):
     '''
     Get ROI for FPP measurement with the help of signal to noise thresholding.
-    ROI Represents a quadrangle defined by four points made up of the minimum and maximum x and y coordinates 
-    for points in the phase field whose value is higher than a specified threshold.
-    Calculated ROI will be stored in input measurement argument.
+    ROI is stored as a mask (fpp_measurement.signal_to_noise_mask) with values 0 for points
+    with signal-to-noise ratio below threshold and 1 for points with ratio above threshold.
+    Additionally ROI is stored as a quadrangle defined by four points consisting of minimum
+    and maximum x and y coordinates for points with signal-to-noise ratio above the threshold.
+    Calculated ROI will be stored in input fpp_measurement argument.
 
     Args:
         fpp_measurement (FPPMeasurement): FPP measurment for calcaulating ROI
@@ -425,15 +426,53 @@ def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshol
     signal_to_nose = fpp_measurement.modulated_intensities[-1] / fpp_measurement.average_intensities[-1]
     # Threshold signal to noise with defined threshold level
     thresholded_coords = np.argwhere(signal_to_nose > signal_to_nose_threshold)
-    
+
+    # Store ROI mask
+    fpp_measurement.signal_to_noise_mask = np.zeros(signal_to_nose.shape, dtype=int)
+    fpp_measurement.signal_to_noise_mask[signal_to_nose > signal_to_nose_threshold] = 1
+
     # Determine four points around thresholded area
     x_min = np.min(thresholded_coords[:,1])
     x_max = np.max(thresholded_coords[:,1])
     y_min = np.min(thresholded_coords[:,0])
     y_max = np.max(thresholded_coords[:,0])
-    
+
     # Store determined ROI
     fpp_measurement.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
+
+
+def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FPPMeasurement):
+    '''
+    Get LUT for horizontal and vertical phase field to increase phasogrammetry calculation speed.
+
+    Args:
+        fpp_measurement_h (FPPMeasurement): FPP measurment for horizontal fringes
+        fpp_measurement_v (FPPMeasurement): FPP measurment for vertical fringes
+    '''
+    p_h = fpp_measurement_h.unwrapped_phases[-1]
+    p_v = fpp_measurement_v.unwrapped_phases[-1]
+
+    ph_max = np.max(p_h)
+    ph_min = np.min(p_h)
+    pv_max = np.max(p_v)
+    pv_min = np.min(p_v)
+    h_range = np.arange(ph_min, ph_max)
+    v_range = np.arange(pv_min, pv_max)
+    w, h = h_range.shape[0] + 1, v_range.shape[0] + 1
+    LUT = [[[] for x in range(w)] for y in range(h)]
+
+    w = p_h.shape[1]
+    h = p_h.shape[0]
+
+    p_h_r = np.round(p_h - ph_min).astype(int)
+    p_v_r = np.round(p_v - pv_min).astype(int)
+
+    for y in range(h):
+        for x in range(w):
+            if fpp_measurement_h.signal_to_noise_mask[y, x] == 1:
+                LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
+        
+    return LUT
 
 
 def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
@@ -482,8 +521,7 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     for y in yy:
         for x in xx:
             # Check if coordinate in ROI rectangle
-            # if measurements_h[0].modulation_mask[y, x] == 1:
-            if point_inside_polygon(x, y, ROI1):
+            if measurements_h[0].signal_to_noise_mask[y, x] == 1:
                 coords1.append((x, y))
 
     coords2 = []
