@@ -8,6 +8,7 @@ from multiprocessing import Pool
 import cv2
 import numpy as np
 from scipy import signal
+from scipy.optimize import fsolve
 
 import config
 from fpp_structures import FPPMeasurement 
@@ -256,10 +257,10 @@ def triangulate_points(calibration_data: dict, image1_points: list, image2_point
     proj_mtx_2 = np.dot(cam2_mtx, np.hstack((calibration_data['R'], calibration_data['T'])))
 
     # Undistort 2d points
-    undist_points_2d_1 = np.array(image1_points, dtype=np.float32)
-    undist_points_2d_2 = np.array(image2_points, dtype=np.float32)
-    undist_points_2d_1 = cv2.undistortPoints(undist_points_2d_1, cam1_mtx, dist1_mtx, P=cam1_mtx)
-    undist_points_2d_2 = cv2.undistortPoints(undist_points_2d_2, cam2_mtx, dist2_mtx, P=cam2_mtx)
+    points_2d_1 = np.array(image1_points, dtype=np.float32)
+    points_2d_2 = np.array(image2_points, dtype=np.float32)
+    undist_points_2d_1 = cv2.undistortPoints(points_2d_1, cam1_mtx, dist1_mtx, P=cam1_mtx)
+    undist_points_2d_2 = cv2.undistortPoints(points_2d_2, cam2_mtx, dist2_mtx, P=cam2_mtx)
 
     # Calculate the triangulation of 3D points
     points_hom = cv2.triangulatePoints(proj_mtx_1, proj_mtx_2, undist_points_2d_1, undist_points_2d_2)
@@ -272,15 +273,72 @@ def triangulate_points(calibration_data: dict, image1_points: list, image2_point
 
     # Calculate reprojection error
     tot_error = 0
-    tot_error += np.sum(np.square(np.float64(undist_points_2d_1 - reproj_points)))
+    tot_error += np.sum(np.square(points_2d_1[:,np.newaxis,:] - reproj_points))
     rms1 = np.sqrt(tot_error/reproj_points.shape[0])
     print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
     tot_error = 0
-    tot_error += np.sum(np.square(np.float64(undist_points_2d_2 - reproj_points2)))
+    tot_error += np.sum(np.square(points_2d_2[:,np.newaxis,:] - reproj_points2))
     rms2 = np.sqrt(tot_error/reproj_points.shape[0])
     print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
     
-    return points_3d, undist_points_2d_1, undist_points_2d_2, rms1, rms2
+    return points_3d, points_2d_1, points_2d_2, rms1, rms2
+
+
+def calculate_bilinear_interpolation_coeficients(points: tuple[tuple]) -> np.ndarray:
+    '''
+    Calculate coeficients for bilinear interploation of 2d data. Bilinear interpolation is defined as
+    polinomal fit f(x0, y0) = a0 + a1 * x0 + a2 * y0 + a3 * x0 * y0. Equations is used from wiki:
+    https://en.wikipedia.org/wiki/Bilinear_interpolation
+
+    Args:
+        points (tuple[tuple]): four elements in format (x, y, f(x, y))
+        
+    Returns:
+        bilinear_coeficients (numpy array): four coeficients for bilinear interploation for input points
+    '''
+    # Sort points
+    points = sorted(points)
+    
+    # Get x, y coordinates and values for this points
+    (x1, y1, q11), (_, y2, q12), (x2, _, q21), (_, _, q22) = points
+    
+    # Get matrix A
+    A = np.array([[x2*y2, -x2*y1, -x1*y2, x1*y1],
+                  [-y2, y1, y2, -y1],
+                  [-x2, x2, x1, -x1],
+                  [1, -1, -1, 1]
+    ])
+
+    # Get vector B
+    B = np.array([q11, q12, q21, q22])
+
+    # Calculate coeficients for bilinear interploation
+    bilinear_coeficients = (1 / ((x2 - x1) * (y2 - y1))) * A.dot(B)
+    return bilinear_coeficients
+
+
+def bilinear_phase_fields_approximation(p: tuple[float, float], *data: tuple) -> tuple[float, float]:
+    '''
+    Calculate residiuals for bilinear interploation of horizontal and vertical phase fields.
+    Function is used in find_phasogrammetry_corresponding_point fsolve function.
+
+    Args:
+        p (tuple[float, float]): x and y coordinates of point in which residiual is calculated
+        data (tuple): data to calculate residiuals
+            - a (numpy array): four coeficients which defines linear interploation for horizontal phase field
+            - b (numpy array): four coeficients which defines linear interploation for vertical phase field
+            - p_h (float): horizontal phase to match in interplotated field
+            - p_v (float): vertical phase to match in interplotated field
+
+    Returns:
+        res_h, res_v (tuple[float, float]): residiuals for horizontal and vertical field in point (x, y)
+    '''
+    x, y = p
+
+    a, b, p_h, p_v = data 
+
+    return (a[0] + a[1]*x + a[2]*y + a[3]*x*y - p_h,
+            b[0] + b[1]*x + b[2]*y + b[3]*x*y - p_v)    
 
 
 def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int, LUT:list[list[list[int]]]=None) -> tuple[float, float]:
@@ -303,20 +361,59 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     Returns:
         x2, y2 (tuple[float, float]): horizontal and vertical coordinate of corresponding point for second camera
     '''
-    # Determine the phase values on vertical and horizontal phase fields 
+    # Get the phase values on vertical and horizontal phase fields 
     phase_h = p1_h[y, x]
     phase_v = p1_v[y, x]
 
     # If LUT available calculate corresponding points with it
     if LUT is not None:
+        # Get value for x, y coordinate from LUT as first approximation 
         phase_h_index = LUT[-2].index(int(np.round(phase_h)))
         phase_v_index = LUT[-1].index(int(np.round(phase_v)))
+        
         cor_points = LUT[phase_v_index][phase_h_index]
-        if len(cor_points) > 0:
-            # Return mean coordinates
-            return np.mean(cor_points, axis=0)
-        # else:
-        #     return -1, -1
+
+        if len(cor_points) > 0 and len(cor_points) < 20:
+            # Get mean value for x, y coordinate for points from LUT as second approximation
+            x, y = np.mean(cor_points, axis=0)
+
+            # Get neareast coords to x and y
+            if int(np.round(x)) - x == 0:
+                x1 = int(x - 1)
+                x2 = int(x + 1)
+            else:
+                x1 = int(np.floor(x))
+                x2 = int(np.ceil(x))
+
+            if int(np.round(y)) - y == 0:
+                y1 = int(y - 1)
+                y2 = int(y + 1)
+            else:
+                y1 = int(np.floor(y))
+                y2 = int(np.ceil(y))
+
+            # If coords are positive
+            if x1 > 0  and x2 > 0 and y1 > 0 and y2 > 0:
+
+                # Get coeficients for bilinear interploation for horizontal phase
+                aa = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_h[y1, x1]), (x1, y2, p2_h[y2, x1]),
+                                                                   (x2, y2, p2_h[y2, x2]), (x2, y1, p2_h[y2, x1])))
+                # Get coeficients for bilinear interploation for vertical phase
+                bb = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_v[y1, x1]), (x1, y2, p2_v[y2, x1]),
+                                                                   (x2, y2, p2_v[y2, x2]), (x2, y1, p2_v[y2, x1])))
+
+                # Find there bilinear interploation is equal to phase_h and phase_v
+                x, y =  fsolve(bilinear_phase_fields_approximation, (x1, y1), args=(aa, bb, phase_h, phase_v))
+
+                # TODO: Return residiuals from function
+                # Calculate residiuals
+                # h_res, v_res = bilinear_phase_fields_approximation((x, y), aa, bb, phase_h, phase_v) 
+
+                return x, y
+            else:
+                return -1, -1
+        else:
+            return -1, -1
 
     # Find coords of isophase curves
     y_h, x_h = np.where(np.isclose(p2_h, phase_h, atol=10**-1))

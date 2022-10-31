@@ -11,7 +11,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import config
 
-from processing import calculate_phase_for_fppmeasurement, process_fppmeasurement_with_phasogrammetry, get_phase_field_ROI, get_phase_field_LUT
+from processing import calculate_phase_for_fppmeasurement, process_fppmeasurement_with_phasogrammetry, get_phase_field_ROI, get_phase_field_LUT, triangulate_points
 from utils import load_fpp_measurements
 
 
@@ -32,8 +32,6 @@ def fit_to_plane(x, y, z):
 
 if __name__ == '__main__':
 
-    TEMP_PATH = r'./temp'
-
     # Load FPPMeasurements from files
     print('Load FPPMeasurements from files...', end='', flush=True)
     measurements_h = load_fpp_measurements(r'.\data\20-10-2022_13-44-56\measure_20-10-2022_13-44-56.json')
@@ -41,7 +39,7 @@ if __name__ == '__main__':
     print('Done')
 
     # Load calibration data for cameras stero system
-    print('Load calibration data for cameras stero system...', end='', flush=True)
+    print('Load calibration data for cameras stereo system...', end='', flush=True)
     with open(config.DATA_PATH + r'/calibrated_data_20-10-2022.json', 'r') as fp:
         calibration_data = json.load(fp)
     print('Done')
@@ -87,30 +85,43 @@ if __name__ == '__main__':
     LUT = get_phase_field_LUT(measurements_h[1], measurements_v[1])
     print('Done')
 
+    # Set ROI manually for test plate
     measurements_h[0].ROI = np.array([[430, 270], [1580, 250], [1480, 1300], [500, 1450]], dtype = "float32")
 
     # Process FPPMeasurements with phasogrammetry approach
     print('Calculate 3D points with phasogrammetry approach...', end='', flush=True)
     points_3d, points_2d_1, points_2d_2, _, _ = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
+    points_3d = np.reshape(points_3d, (points_3d.shape[0], points_3d.shape[2]))
     print('Done')
 
-    points_3d = np.reshape(points_3d, (points_3d.shape[0], points_3d.shape[2]))
-
+    print('Fit points to plane')
     fit = fit_to_plane(points_3d[:,0], points_3d[:,1], points_3d[:,2])
+    distance_to_plane = np.abs(points_3d[:, 2] - (fit[0] * points_3d[:, 0] + fit[1] * points_3d[:, 1] + fit[2]))
+    
+    print(f'Fitting deviation std = {np.std(distance_to_plane)} mm')
+    print(f'Fitting deviation mean = {np.mean(distance_to_plane)} mm')
 
-    d = np.abs(points_3d[:, 2] - (fit[0] * points_3d[:, 0] + fit[1] * points_3d[:, 1] + fit[2]))
-    print(f'Std = {np.std(d)} mm')
-    print(f'Mean = {np.mean(d)} mm')
+    # plt.hist(distance_to_plane, 30)
+    # plt.show()
 
     # Filter outliers
-    x = points_3d[d<3*np.std(d), 0]
-    y = points_3d[d<3*np.std(d), 1]
-    z = points_3d[d<3*np.std(d), 2]
+    print('Try to filter outliers')
+    x = points_3d[distance_to_plane<3*np.std(distance_to_plane), 0]
+    y = points_3d[distance_to_plane<3*np.std(distance_to_plane), 1]
+    z = points_3d[distance_to_plane<3*np.std(distance_to_plane), 2]
+    points_2d_1 = points_2d_1[distance_to_plane<3*np.std(distance_to_plane),:]
+    points_2d_2 = points_2d_2[distance_to_plane<3*np.std(distance_to_plane),:]
 
+    points_3d, _, _, _, _ = triangulate_points(calibration_data, points_2d_1, points_2d_2)
+
+    print('Fit points to plane without outliers')
     fit2 = fit_to_plane(x, y, z)
-    d = np.abs(z - (fit2[0] * x + fit2[1] * y + fit2[2]))
-    print(f'Std = {np.std(d)} mm')
-    print(f'Mean = {np.mean(d)} mm')
+    distance_to_plane = np.abs(z - (fit2[0] * x + fit2[1] * y + fit2[2]))
+    print(f'Fitting deviation std = {np.std(distance_to_plane)} mm')
+    print(f'Fitting deviation mean = {np.mean(distance_to_plane)} mm')
+
+    # plt.hist(distance_to_plane, 30)
+    # plt.show()
 
      # Plot 3D point cloud
     fig = plt.figure()
@@ -128,6 +139,6 @@ if __name__ == '__main__':
 
     plt.show()
 
-    plt.tricontourf(x, y, d, levels=100)
+    plt.tricontourf(x, y, distance_to_plane, levels=100)
     plt.colorbar()
     plt.show()
