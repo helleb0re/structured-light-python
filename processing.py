@@ -314,7 +314,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
         cor_points = LUT[phase_v_index][phase_h_index]
         if len(cor_points) > 0:
             # Return mean coordinates
-            return np.mean(cor_points, axis=0) 
+            return np.mean(cor_points, axis=0)
         # else:
         #     return -1, -1
 
@@ -390,8 +390,8 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
     Returns:
         corelation_field (numpy array): calculated correlation field
     '''
-    p1_h_ij = p1_h[y - window_size//2:y + window_size//2, x - window_size//2:x + window_size//2]
-    p1_v_ij = p1_v[y - window_size//2:y + window_size//2, x - window_size//2:x + window_size//2]
+    p1_h_ij = p1_h[int(y - window_size//2):int(y + window_size//2), int(x - window_size//2):int(x + window_size//2)]
+    p1_v_ij = p1_v[int(y - window_size//2):int(y + window_size//2), int(x - window_size//2):int(x + window_size//2)]
     p1_h_m = np.mean(p1_h_ij)
     p1_v_m = np.mean(p1_v_ij)
 
@@ -404,8 +404,8 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
         for i in range(xx.shape[0]):
             x0 = xx[i]
             y0 = yy[j]
-            p2_h_ij = p2_h[y0 - window_size //2:y0 + window_size //2, x0 - window_size//2:x0 + window_size//2]
-            p2_v_ij = p2_v[y0 - window_size //2:y0 + window_size //2, x0 - window_size//2:x0 + window_size//2]
+            p2_h_ij = p2_h[int(y0 - window_size //2):int(y0 + window_size //2), int(x0 - window_size//2):int(x0 + window_size//2)]
+            p2_v_ij = p2_v[int(y0 - window_size //2):int(y0 + window_size //2), int(x0 - window_size//2):int(x0 + window_size//2)]
             p2_h_m = np.mean(p2_h_ij)
             p2_v_m = np.mean(p2_v_ij)
             t1_h = (p1_h_ij - p1_h_m) ** 2
@@ -415,8 +415,8 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
 
             if p2_h_ij.size == p1_h_ij.size and p2_v_ij.size == p1_v_ij.size:
                 t = np.sum(t1_h * t1_v * t2_h * t2_v) / np.sqrt(np.sum(t1_h * t1_v) * np.sum(t2_h * t2_v))
-                if t < 1:
-                    corelation_field[j, i] = t
+                # if t < 1:
+                corelation_field[j, i] = t
 
     return corelation_field
 
@@ -526,20 +526,13 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     p1_v = measurements_v[0].unwrapped_phases[-1]
     p2_v = measurements_v[1].unwrapped_phases[-1]
 
-    # # Сoordinates of the corners of the rectangle to set the ROI processing
-    # ROI1 = np.array([[110, 335], [1861, 397], [1920, 1380], [90, 1446]], dtype = "float32")
-    # ROI2 = np.array([[167, 451], [1904, 286], [1944, 1429], [118, 1395]], dtype = "float32")
+    # Get ROI from measurement object
     ROI1 = measurements_h[0].ROI
-    ROI2 = measurements_h[1].ROI
 
     # Cut ROI from phase fields for second camera
-    # ROIx = slice(int(np.min(ROI2[:,0])), int(np.max(ROI2[:,0])))
-    # ROIy = slice(int(np.min(ROI2[:,1])), int(np.max(ROI2[:,1])))
     ROIx = slice(0, measurements_h[1].unwrapped_phases[-1].shape[1])
     ROIy = slice(0, measurements_h[1].unwrapped_phases[-1].shape[0])
 
-    # p1_h = p1_h[ROIy][ROIx]
-    # p1_v = p1_v[ROIy][ROIx]
     p2_h = p2_h[ROIy, ROIx]
     p2_v = p2_v[ROIy, ROIx]
 
@@ -552,7 +545,9 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     for y in yy:
         for x in xx:
             # Check if coordinate in ROI rectangle
-            if measurements_h[0].signal_to_noise_mask[y, x] == 1:
+            # if measurements_h[0].signal_to_noise_mask[y, x] == 1:
+            #   coords1.append((x, y))
+            if point_inside_polygon(x, y, ROI1):
                 coords1.append((x, y))
 
     coords2 = []
@@ -602,7 +597,7 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
 
     # Remove outliers
     std_d = np.std(distance)
-    indicies_to_delete = [i for i in range(len(distance)) if distance[i] > std_d*3]
+    indicies_to_delete = [i for i in range(len(distance)) if distance[i] > std_d*10]
     for index in reversed(indicies_to_delete):
         image1_points.pop(index)
         image2_points.pop(index)
