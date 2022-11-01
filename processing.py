@@ -601,20 +601,17 @@ def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FP
     return LUT
 
 
-def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict, LUT:list[list[list[int]]]=None) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict, LUT:list[list[list[int]]]=None) -> tuple[list, list]:
     '''
-    Find 3D point cloud with phasogrammetry approach 
+    Find 2D corresponding points for two phase fields sets with phasogrammetry approach 
 
     Args:
         fppmeasurements_h (list of FPPMeasurement): list of FPPMeasurements instances with horizontal fringes
         fppmeasurements_v (list of FPPMeasurement): list of FPPMeasurements instances with vertical fringes
         calibration_data (dict): dict of calibration data for stereo cameras system
     Returns:
-        points_3d (numpy aaray): 3D point cloud
-        points_2d_1 (numpy array): 2D points from first camera
-        points_2d_2 (numpy array): 2D points from second camera
-        rms1 (float): reprojection error for first camera
-        rms2 (float): reprojection error for second camera
+        points_1 (list): corresponding 2D points from first camera
+        points_2 (list): corresponding 2D points from second camera
     '''
     # Take phases with highest frequencies 
     p1_h = measurements_h[0].unwrapped_phases[-1]
@@ -699,9 +696,7 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
         image1_points.pop(index)
         image2_points.pop(index)
 
-    points_3d, points_2d_1, points_2d_2, rms1, rms2 = triangulate_points(calibration_data, image1_points, image2_points)
- 
-    return points_3d, points_2d_1, points_2d_2, rms1, rms2
+    return image1_points, image2_points
 
 
 def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_size_x: int, win_size_y: int, step_x: int, step_y: int) -> np. ndarray:

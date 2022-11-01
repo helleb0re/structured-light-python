@@ -34,13 +34,13 @@ if __name__ == '__main__':
 
     # Load FPPMeasurements from files
     print('Load FPPMeasurements from files...', end='', flush=True)
-    measurements_h = load_fpp_measurements(r'.\data\20-10-2022_13-44-56\measure_20-10-2022_13-44-56.json')
-    measurements_v = load_fpp_measurements(r'.\data\20-10-2022_13-45-06\measure_20-10-2022_13-45-06.json')
+    measurements_h = load_fpp_measurements(r'.\data\01-11-2022_17-55-30\measure_01-11-2022_17-55-30.json')
+    measurements_v = load_fpp_measurements(r'.\data\01-11-2022_17-55-40\measure_01-11-2022_17-55-40.json')
     print('Done')
 
     # Load calibration data for cameras stero system
     print('Load calibration data for cameras stereo system...', end='', flush=True)
-    with open(config.DATA_PATH + r'/calibrated_data_20-10-2022.json', 'r') as fp:
+    with open(config.DATA_PATH + r'/calibrated_data_01-11-2022.json', 'r') as fp:
         calibration_data = json.load(fp)
     print('Done')
 
@@ -56,13 +56,13 @@ if __name__ == '__main__':
 
     # Plot unwrapped phases
     plt.subplot(221)
-    plt.imshow(measurements_h[0].phases[-3], cmap='gray')
+    plt.imshow(measurements_h[0].unwrapped_phases[-3], cmap='gray')
     plt.subplot(222)
-    plt.imshow(measurements_h[1].phases[-3], cmap='gray')
+    plt.imshow(measurements_h[1].unwrapped_phases[-3], cmap='gray')
     plt.subplot(223)
-    plt.imshow(measurements_v[0].phases[-3], cmap='gray')
+    plt.imshow(measurements_v[0].unwrapped_phases[-3], cmap='gray')
     plt.subplot(224)
-    plt.imshow(measurements_v[1].phases[-3], cmap='gray')
+    plt.imshow(measurements_v[1].unwrapped_phases[-3], cmap='gray')
     plt.show()
 
     print('Determine phase fields ROI...', end='', flush=True)
@@ -81,16 +81,20 @@ if __name__ == '__main__':
     plt.imshow(measurements_v[1].modulated_intensities[-1]/measurements_v[1].average_intensities[-1], cmap='gray')
     plt.show()
 
+    # Set ROI manually for test plate
+    measurements_h[0].ROI = np.array([[470, 270], [1420, 170], [1350, 1150], [520, 1350]], dtype = "float32")
+
     print('Calculate phase fields LUT...', end='', flush=True)
     LUT = get_phase_field_LUT(measurements_h[1], measurements_v[1])
     print('Done')
 
-    # Set ROI manually for test plate
-    measurements_h[0].ROI = np.array([[430, 270], [1580, 250], [1480, 1300], [500, 1450]], dtype = "float32")
-
     # Process FPPMeasurements with phasogrammetry approach
-    print('Calculate 3D points with phasogrammetry approach...', end='', flush=True)
-    points_3d, points_2d_1, points_2d_2, _, _ = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
+    print('Calculate 2D corresponding points with phasogrammetry approach...', end='', flush=True)
+    points_1, points_2 = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
+    print('Done')
+
+    print('Calculate 3D points with triangulation...')
+    points_3d, points_2d_1, points_2d_2, rms1, rms2 = triangulate_points(calibration_data, points_1, points_2)
     points_3d = np.reshape(points_3d, (points_3d.shape[0], points_3d.shape[2]))
     print('Done')
 
