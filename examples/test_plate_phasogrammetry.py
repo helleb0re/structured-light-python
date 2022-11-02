@@ -70,9 +70,16 @@ if __name__ == '__main__':
     get_phase_field_ROI(measurements_h[1])
     print('Done')
 
+    # Set ROI manually for test plate
+    measurements_h[0].ROI = np.array([[470, 230], [1420, 170], [1350, 1150], [520, 1350]], dtype = "float32")
+
     # Plot signal to noise ration
     plt.subplot(221)
     plt.imshow(measurements_h[0].modulated_intensities[-1]/measurements_h[0].average_intensities[-1], cmap='gray')
+    # Draw ROI
+    plt.plot(measurements_h[0].ROI[:, 0], measurements_h[0].ROI[:, 1], 'r-')
+    plt.plot([measurements_h[0].ROI[-1, 0], measurements_h[0].ROI[0, 0]],
+             [measurements_h[0].ROI[-1, 1], measurements_h[0].ROI[0, 1]], 'r-')
     plt.subplot(222)
     plt.imshow(measurements_h[1].modulated_intensities[-1]/measurements_h[1].average_intensities[-1], cmap='gray')
     plt.subplot(223)
@@ -81,21 +88,19 @@ if __name__ == '__main__':
     plt.imshow(measurements_v[1].modulated_intensities[-1]/measurements_v[1].average_intensities[-1], cmap='gray')
     plt.show()
 
-    # Set ROI manually for test plate
-    measurements_h[0].ROI = np.array([[470, 270], [1420, 170], [1350, 1150], [520, 1350]], dtype = "float32")
-
     print('Calculate phase fields LUT...', end='', flush=True)
     LUT = get_phase_field_LUT(measurements_h[1], measurements_v[1])
     print('Done')
 
     # Process FPPMeasurements with phasogrammetry approach
     print('Calculate 2D corresponding points with phasogrammetry approach...', end='', flush=True)
-    points_1, points_2 = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
+    points_2d_1, points_2d_2 = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, 20, 20, LUT)
     print('Done')
 
     print('Calculate 3D points with triangulation...')
-    points_3d, points_2d_1, points_2d_2, rms1, rms2 = triangulate_points(calibration_data, points_1, points_2)
-    points_3d = np.reshape(points_3d, (points_3d.shape[0], points_3d.shape[2]))
+    points_3d, rms1, rms2, reproj_err1, reproj_err2 = triangulate_points(calibration_data, points_2d_1, points_2d_2)
+    print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
+    print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
     print('Done')
 
     print('Fit points to plane')
@@ -109,14 +114,20 @@ if __name__ == '__main__':
     # plt.show()
 
     # Filter outliers
-    print('Try to filter outliers')
-    x = points_3d[distance_to_plane<3*np.std(distance_to_plane), 0]
-    y = points_3d[distance_to_plane<3*np.std(distance_to_plane), 1]
-    z = points_3d[distance_to_plane<3*np.std(distance_to_plane), 2]
-    points_2d_1 = points_2d_1[distance_to_plane<3*np.std(distance_to_plane),:]
-    points_2d_2 = points_2d_2[distance_to_plane<3*np.std(distance_to_plane),:]
+    reproj_err_threshold = 1.0 # pixel
 
-    points_3d, _, _, _, _ = triangulate_points(calibration_data, points_2d_1, points_2d_2)
+    print('Try to filter outliers')
+    x = points_3d[reproj_err1 < reproj_err_threshold, 0]
+    y = points_3d[reproj_err1 < reproj_err_threshold, 1]
+    z = points_3d[reproj_err1 < reproj_err_threshold, 2]
+    points_2d_1 = points_2d_1[reproj_err1 < reproj_err_threshold,:]
+    points_2d_2 = points_2d_2[reproj_err1 < reproj_err_threshold,:]
+
+    print('Calculate 3D points with triangulation without outliers...')
+    points_3d, rms1, rms2, reproj_err1, reproj_err2 = triangulate_points(calibration_data, points_2d_1, points_2d_2)
+    print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
+    print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
+    print('Done')
 
     print('Fit points to plane without outliers')
     fit2 = fit_to_plane(x, y, z)

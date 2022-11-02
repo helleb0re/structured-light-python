@@ -232,19 +232,19 @@ def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_e
     return inside
 
 
-def triangulate_points(calibration_data: dict, image1_points: list, image2_points: list) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, float]:
+def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2_points: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float, np.ndarray, np.ndarray]:
     '''
     Triangulate two set of 2D point in one set of 3D points
 
     Args:
         calibration_data (dictionary): calibration data used for triangulating
-        image1_points (list): first set of 2D points
-        image2_points (list): second set of 2D points
+        image1_points (numpy arrray [N, 2]): first set of 2D points
+        image2_points (numpy arrray [N, 2]): second set of 2D points
     Returns:
-        points_3d (numpy arrray): triangulated 3D points
-        undist_points_2d_1 (numpy arrray): undistorted 2D points for first set
-        undist_points_2d_2 (numpy arrray): undistorted 2D points for second set
-        rms1, rms2 (float): RMS error for reprojected points for first and second set of points
+        points_3d (numpy arrray [N, 3]): triangulated 3D points
+        rms1 (float): overall reprojection error for first camera
+        rms2 (float): overall reprojection error for second camera
+        reproj_err1, reproj_err2 (numpy arrray [N]): reprojected error for each triangulated point for first and second camera
     '''
     # Calculate the projective matrices according to the stereo calibration data
     cam1_mtx = np.array(calibration_data['camera_0']['mtx'])
@@ -266,22 +266,23 @@ def triangulate_points(calibration_data: dict, image1_points: list, image2_point
     points_hom = cv2.triangulatePoints(proj_mtx_1, proj_mtx_2, undist_points_2d_1, undist_points_2d_2)
     points_3d = cv2.convertPointsFromHomogeneous(points_hom.T)
 
+    points_3d = np.reshape(points_3d, (points_3d.shape[0], points_3d.shape[2]))
+
     # Reproject triangulated points
     reproj_points, _ = cv2.projectPoints(points_3d, np.identity(3), np.zeros((3,1)), cam1_mtx, dist1_mtx)
-
     reproj_points2, _ = cv2.projectPoints(points_3d, np.array(calibration_data['R']), np.array(calibration_data['T']), cam2_mtx, dist2_mtx)
 
     # Calculate reprojection error
-    tot_error = 0
-    tot_error += np.sum(np.square(points_2d_1[:,np.newaxis,:] - reproj_points))
-    rms1 = np.sqrt(tot_error/reproj_points.shape[0])
-    print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
-    tot_error = 0
-    tot_error += np.sum(np.square(points_2d_2[:,np.newaxis,:] - reproj_points2))
-    rms2 = np.sqrt(tot_error/reproj_points.shape[0])
-    print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
+    reproj_err1 = np.sum(np.square(points_2d_1[:,np.newaxis,:] - reproj_points), axis=2)
+    rms1 = np.sqrt(np.sum(reproj_err1)/reproj_points.shape[0])
+
+    reproj_err2 = np.sum(np.square(points_2d_2[:,np.newaxis,:] - reproj_points2), axis=2)
+    rms2 = np.sqrt(np.sum(reproj_err2/reproj_points.shape[0]))
+
+    reproj_err1 = np.reshape(reproj_err1, (reproj_err1.shape[0]))
+    reproj_err2 = np.reshape(reproj_err2, (reproj_err2.shape[0]))
     
-    return points_3d, points_2d_1, points_2d_2, rms1, rms2
+    return points_3d, rms1, rms2, reproj_err1, reproj_err2
 
 
 def calculate_bilinear_interpolation_coeficients(points: tuple[tuple]) -> np.ndarray:
@@ -601,17 +602,18 @@ def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FP
     return LUT
 
 
-def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], calibration_data: dict, LUT:list[list[list[int]]]=None) -> tuple[list, list]:
+def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], step_x: float, step_y: float, LUT:list[list[list[int]]]=None) -> tuple[np.ndarray, np.ndarray]:
     '''
     Find 2D corresponding points for two phase fields sets with phasogrammetry approach 
 
     Args:
         fppmeasurements_h (list of FPPMeasurement): list of FPPMeasurements instances with horizontal fringes
         fppmeasurements_v (list of FPPMeasurement): list of FPPMeasurements instances with vertical fringes
-        calibration_data (dict): dict of calibration data for stereo cameras system
+        step_x, step_y (float): horizontal and vertical steps to calculate corresponding points
+        LUT (list[list[list]]): LUT structure containing the coordinates of points for the horizontal and vertical phase values
     Returns:
-        points_1 (list): corresponding 2D points from first camera
-        points_2 (list): corresponding 2D points from second camera
+        points_1 (numpy array [N, 2]): corresponding 2D points from first camera
+        points_2 (numpy array [N, 2]): corresponding 2D points from second camera
     '''
     # Take phases with highest frequencies 
     p1_h = measurements_h[0].unwrapped_phases[-1]
@@ -631,8 +633,8 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     p2_v = p2_v[ROIy, ROIx]
 
     # Calculation of the coordinate grid on first image
-    xx = np.arange(0, p1_h.shape[1], 25, dtype=np.int32)
-    yy = np.arange(0, p1_h.shape[0], 25, dtype=np.int32)
+    xx = np.arange(0, p1_h.shape[1], step_x, dtype=np.int32)
+    yy = np.arange(0, p1_h.shape[0], step_y, dtype=np.int32)
 
     coords1 = []
 
@@ -695,6 +697,10 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
     for index in reversed(indicies_to_delete):
         image1_points.pop(index)
         image2_points.pop(index)
+
+    # Convert list to array before returning result from function
+    image1_points = np.array(image1_points, dtype=np.float32)
+    image2_points = np.array(image2_points, dtype=np.float32)
 
     return image1_points, image2_points
 
