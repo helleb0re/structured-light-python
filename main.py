@@ -18,7 +18,7 @@ from camera_simulated import CameraSimulated
 from create_patterns import create_psp_templates
 from hand_set_up_camera import camera_adjust, camera_baumer_adjust
 from min_max_projector_calibration import MinMaxProjectorCalibration
-from fpp_structures import FPPMeasurement
+from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
 from processing import process_fppmeasurement_with_phasogrammetry, calculate_phase_for_fppmeasurement, get_phase_field_ROI, get_phase_field_LUT, calculate_displacement_field
 
 
@@ -198,7 +198,7 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
     return brightness1, brightness2
 
 
-def capture_measurement_images(cameras: list[Camera], projector: Projector, vertical: bool) -> tuple[FPPMeasurement, FPPMeasurement]:
+def capture_measurement_images(cameras: list[Camera], projector: Projector, vertical: bool, phase_shift_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step) -> tuple[FPPMeasurement, FPPMeasurement]:
     '''
     Do fringe projection measurement. Generate pattern, project them via projector and capture images with cameras.
 
@@ -218,7 +218,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
     cv2.resizeWindow('cam2', 600, 400)
 
     # Create phase shift profilometry patterns
-    patterns, phase_shifts, frequencies = create_psp_templates(1920, 1080, [1, 4, 12, 48, 90, 145], vertical=vertical)
+    patterns, phase_shifts, frequencies = create_psp_templates(1280, 720, [1, 12, 48, 138], phase_shift_type, vertical=vertical)
 
     # List to store captured images
     images1 = []
@@ -307,7 +307,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
         phase_shifts,
         filenames1 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
         'vertical' if vertical else 'horizontal', 
-        imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images1
+        imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images1,
     )
     meas2 = FPPMeasurement(
         frequencies,
@@ -316,6 +316,9 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
         'vertical' if vertical else 'horizontal', 
         imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images2
     )
+
+    meas1.phase_shifting_type = phase_shift_type
+    meas2.phase_shifting_type = phase_shift_type
 
     # Save results of measurement in json file if defined in config
     if config.SAVE_MEASUREMENT_IMAGE_FILES:
@@ -369,39 +372,39 @@ if __name__ == '__main__':
             MinMaxProjectorCalibration(test_pattern, cameras, projector)
 
         elif (choice == 4):
-            measurements_h = capture_measurement_images(cameras, projector, vertical=False)
-            measurements_v = capture_measurement_images(cameras, projector, vertical=True)
+            measurements_h = capture_measurement_images(cameras, projector, vertical=False, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)
+            measurements_v = capture_measurement_images(cameras, projector, vertical=True, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)
 
-            i = 1
-            k = 0
-            for measurements in [*measurements_h, *measurements_v]:
-                k += 1
-                calculate_phase_for_fppmeasurement(measurements)
-                get_phase_field_ROI(measurements, i)
-                if k == 2:
-                    i += 1
-                    k = 0
+            # i = 1
+            # k = 0
+            # for measurements in [*measurements_h, *measurements_v]:
+            #     k += 1
+            #     calculate_phase_for_fppmeasurement(measurements)
+            #     get_phase_field_ROI(measurements, i)
+            #     if k == 2:
+            #         i += 1
+            #         k = 0
         
-            with open(config.DATA_PATH + r'/calibrated_data.json', 'r') as fp:
-                calibration_data = json.load(fp)
+            # with open(config.DATA_PATH + r'/calibrated_data.json', 'r') as fp:
+            #     calibration_data = json.load(fp)
 
-            LUT = get_phase_field_LUT(measurements_h[-1], measurements_v[-1])
+            # LUT = get_phase_field_LUT(measurements_h[-1], measurements_v[-1])
 
-            # Process FPPMeasurements with phasogrammetry approach
-            points_3d, _, _, _, _ = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
+            # # Process FPPMeasurements with phasogrammetry approach
+            # points_3d, _, _, _, _ = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
 
-            # Plot 3D point cloud
-            fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
+            # # Plot 3D point cloud
+            # fig = plt.figure()
+            # ax = fig.add_subplot(111, projection='3d')
 
-            ax.scatter(points_3d[:,0,0], points_3d[:,0,1], points_3d[:,0,2])
+            # ax.scatter(points_3d[:,0,0], points_3d[:,0,1], points_3d[:,0,2])
 
-            ax.set_xlabel('X Label')
-            ax.set_ylabel('Y Label')
-            ax.set_zlabel('Z Label')
+            # ax.set_xlabel('X Label')
+            # ax.set_ylabel('Y Label')
+            # ax.set_zlabel('Z Label')
 
-            ax.set_ylim(ax.get_xlim())
+            # ax.set_ylim(ax.get_xlim())
 
-            ax.view_init(elev=-75, azim=-89)
+            # ax.view_init(elev=-75, azim=-89)
 
-            plt.show()
+            # plt.show()

@@ -8,7 +8,7 @@ import json
 import numpy as np
 from matplotlib import pyplot as plt
 
-from fpp_structures import FPPMeasurement
+from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
 from processing import calculate_phase_for_fppmeasurement
 
 
@@ -72,10 +72,10 @@ def load_fpp_measurements(file: str) -> list[FPPMeasurement]:
             shifts = instance['shifts'],
             frequencies = instance['frequencies'],
             fringe_orientation = instance['fringe_orientation'],
-            
+            imgs_file_names =   instance['imgs_file_names']
         )
-
-        measurement.imgs_file_names = instance['imgs_file_names']
+        measurement.phase_shifting_type = PhaseShiftingAlgorithm(instance['phase_shifting_type'])
+        # measurement.imgs_file_names = instance['imgs_file_names']
 
         measurements.append(measurement)
 

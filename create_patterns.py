@@ -5,8 +5,10 @@ from typing import Union
 
 import numpy as np
 
+from fpp_structures import PhaseShiftingAlgorithm
 
-def create_psp_template(width: int, height: int, frequency: float, shifts_number: int = 4, vertical: bool = True) -> tuple[list[np.ndarray], list[float]]:
+
+def create_psp_template(width: int, height: int, frequency: float, shifts_number: int = 4, vertical: bool = True, delta_fi: float = 0) -> tuple[list[np.ndarray], list[float]]:
     '''
     Create set of patterns for phase shift profilometry for one frequencies.
     Patterns returned as list of numpy arrays.
@@ -34,7 +36,7 @@ def create_psp_template(width: int, height: int, frequency: float, shifts_number
     x = np.linspace(0, length, length)
 
     # Calculate phase shifts
-    phase_shifts = [2 * np.pi / shifts_number * i for i in range(shifts_number)]
+    phase_shifts = [2 * np.pi / shifts_number * i + delta_fi for i in range(shifts_number)]
     
     for phase_shift in phase_shifts:
         # Calculate cos sequence with defined parameters
@@ -50,7 +52,7 @@ def create_psp_template(width: int, height: int, frequency: float, shifts_number
 
     return patterns, phase_shifts
 
-def create_psp_templates(width: int, height: int, frequencies: Union[int, list[float]], shifts_number: int = 4, vertical: bool = True) -> tuple[list[list[np.ndarray]], list[float], list[float]]:
+def create_psp_templates(width: int, height: int, frequencies: Union[int, list[float]], phase_shift_type: PhaseShiftingAlgorithm, shifts_number: int = 4, vertical: bool = True) -> tuple[list[list[np.ndarray]], list[float], list[float]]:
     '''
     Create set of patterns for phase shift profilometry for several frequencies.
     Patterns returned as list of list of numpy arrays.
@@ -71,12 +73,17 @@ def create_psp_templates(width: int, height: int, frequencies: Union[int, list[f
     '''
     patterns = []
 
-    if type(frequencies) is int:
-        frequencies = [1 + 3 * i for i in range(frequencies)]
-
-    for frequency in frequencies:
-        template, phase_shifts = create_psp_template(width, height, frequency, shifts_number, vertical)
-        patterns.append(template)
+    if phase_shift_type == PhaseShiftingAlgorithm.n_step:
+        for frequency in frequencies:
+            template, phase_shifts = create_psp_template(width, height, frequency, shifts_number, vertical)
+            patterns.append(template)
+    elif phase_shift_type == PhaseShiftingAlgorithm.double_three_step:
+        for frequency in frequencies:
+            template, phase_shifts = create_psp_template(width, height, frequency, 3, vertical)
+            patterns.append(template)
+            template, phase_shifts2 = create_psp_template(width, height, frequency, 3, vertical, -np.pi / 3)
+            patterns[-1].extend(template)
+            phase_shifts.extend(phase_shifts2)
 
     return patterns, phase_shifts, frequencies 
 

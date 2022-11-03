@@ -11,10 +11,10 @@ from scipy import signal
 from scipy.optimize import fsolve
 
 import config
-from fpp_structures import FPPMeasurement 
+from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm 
 
 
-def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[list[float]]=None, frequency: Optional[float]=None, direct_formula: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray] :
+def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[list[float]]=None, frequency: Optional[float]=None, phase_shifting_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step, direct_formula: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray] :
     '''
     Calculate wrapped phase from several PSP images by 
     generic formula (8) in https://doi.org/10.1016/j.optlaseng.2018.04.019
@@ -32,9 +32,48 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
         modulated_intensity (2D numpy array): modulated intensity on images
     '''
 
-    assert phase_shifts is None or len(images) == len(phase_shifts), \
-    'Length of phase_shifts must be equal to images length'
+    # assert phase_shifts is None or len(images) == len(phase_shifts), \
+    # 'Length of phase_shifts must be equal to images length'
 
+    def calculate_n_step_phase(imgs: list[np.ndarray], phase_shifts: list[float]):
+        # Use specific case for phase shifts length
+        if direct_formula and len(phase_shifts) == 3:
+            # Calculate formula (14-16) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+            sum12 = imgs[1] - imgs[2]
+            sum012 = 2 * imgs[0] - imgs[1] - imgs[2]
+            result_phase = np.arctan2(np.sqrt(3) * (sum12), sum012)
+            average_intensity = (imgs[0] + imgs[1] + imgs[2]) / 3
+            modulated_intensity = 1/3 * np.sqrt(3*(sum12)**2 + (sum012)**2)
+        elif direct_formula and len(phase_shifts) == 4:
+            # Calculate formula (21-23) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+            sum13 = imgs[1] - imgs[3]
+            sum02 = imgs[0] - imgs[2]
+            result_phase = np.arctan2(sum13, sum02)
+            average_intensity = (imgs[0] + imgs[1] + imgs[2] + imgs[3]) / 4
+            modulated_intensity = 0.5 * np.sqrt(sum13**2 + sum02**2)
+        else:
+            # Reshape phase shifts for broadcasting multiplying
+            phase_shifts = np.array(phase_shifts).reshape((-1,) + (1, 1))
+
+            # Add suplementary phase to get phase for unity frequency measurment
+            phase_sup = 0
+            if frequency is not None and frequency == 1:
+                phase_sup = np.pi
+
+            # Calculate formula (8) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+            temp1 = np.multiply(imgs, np.sin(phase_shifts + phase_sup))
+            temp2 = np.multiply(imgs, np.cos(phase_shifts + phase_sup))
+
+            sum1 = np.sum(temp1, 0)
+            sum2 = np.sum(temp2, 0)
+
+            result_phase = np.arctan2(sum1, sum2)
+
+            # Calculate formula (9-10) in https://doi.org/10.1016/j.optlaseng.2018.04.019
+            average_intensity = np.mean(imgs, 0)
+            modulated_intensity = 2 * np.sqrt(np.power(sum1, 2) + np.power(sum2, 2)) / len(images)
+        return result_phase, average_intensity, modulated_intensity
+    
     # Calculate shifts if its not defined 
     if phase_shifts is None:
         phase_shifts = [2 * np.pi / len(images) * n for n in range(len(images))]
@@ -44,44 +83,17 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
 
     for i in range(len(images)):
         imgs[i] = images[i]
-
-    # Use specific case for phase shifts length
-    if direct_formula and len(phase_shifts) == 3:
-        # Calculate formula (14-16) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-        sum12 = imgs[1] - imgs[2]
-        sum012 = 2 * imgs[0] - imgs[1] - imgs[2]
-        result_phase = np.arctan2(np.sqrt(3) * (sum12), sum012)
-        average_intensity = (imgs[0] + imgs[1] + imgs[2]) / 3
-        modulated_intensity = 1/3 * np.sqrt(3*(sum12)**2 + (sum012)**2)
-    elif direct_formula and len(phase_shifts) == 4:
-        # Calculate formula (21-23) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-        sum13 = imgs[1] - imgs[3]
-        sum02 = imgs[0] - imgs[2]
-        result_phase = np.arctan2(sum13, sum02)
-        average_intensity = (imgs[0] + imgs[1] + imgs[2] + imgs[3]) / 4
-        modulated_intensity = 0.5 * np.sqrt(sum13**2 + sum02**2)
-    else:
-        # Reshape phase shifts for broadcasting multiplying
-        phase_shifts = np.array(phase_shifts).reshape((-1,) + (1, 1))
-
-        # Add suplementary phase to get phase for unity frequency measurment
-        phase_sup = 0
-        if frequency is not None and frequency == 1:
-            phase_sup = np.pi
-
-        # Calculate formula (8) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-        temp1 = np.multiply(imgs, np.sin(phase_shifts + phase_sup))
-        temp2 = np.multiply(imgs, np.cos(phase_shifts + phase_sup))
-
-        sum1 = np.sum(temp1, 0)
-        sum2 = np.sum(temp2, 0)
-
-        result_phase = np.arctan2(sum1, sum2)
-
-        # Calculate formula (9-10) in https://doi.org/10.1016/j.optlaseng.2018.04.019
-        average_intensity = np.mean(imgs, 0)
-        modulated_intensity = 2 * np.sqrt(np.power(sum1, 2) + np.power(sum2, 2)) / len(images)
-
+    
+    if phase_shifting_type == PhaseShiftingAlgorithm.n_step:
+        result_phase, average_intensity, modulated_intensity = calculate_n_step_phase(images, phase_shifts)
+    elif phase_shifting_type == PhaseShiftingAlgorithm.double_three_step:
+        result_phase1, average_intensity1, modulated_intensity1 = calculate_n_step_phase(imgs[:3,:,:], phase_shifts[:3])
+        result_phase2, average_intensity2, modulated_intensity2 = calculate_n_step_phase(imgs[3:,:,:], phase_shifts[3:])
+        
+        result_phase = (result_phase1 + result_phase2) / 2
+        average_intensity = (average_intensity1 + average_intensity2) / 2
+        modulated_intensity = (modulated_intensity1 + modulated_intensity2) / 2
+    
     return result_phase, average_intensity, modulated_intensity
 
 
@@ -161,7 +173,7 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
         else:
             images_for_one_frequency = images[i]
 
-        phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, measurement.shifts, measurement.frequencies[i])
+        phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, measurement.shifts, measurement.frequencies[i], phase_shifting_type=measurement.phase_shifting_type)
 
         mask = np.where(mod_int > 5, 1, 0) 
         phase = phase * mask
