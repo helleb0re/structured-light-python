@@ -19,7 +19,7 @@ from create_patterns import create_psp_templates
 from hand_set_up_camera import camera_adjust, camera_baumer_adjust
 from min_max_projector_calibration import MinMaxProjectorCalibration
 from fpp_structures import FPPMeasurement
-from processing import process_fppmeasurement_with_phasogrammetry
+from processing import process_fppmeasurement_with_phasogrammetry, calculate_phase_for_fppmeasurement, get_phase_field_ROI, get_phase_field_LUT, calculate_displacement_field
 
 
 def initialize_cameras(cam_type: str, cam_to_found_number: int=2) -> list[Camera]:
@@ -218,7 +218,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
     cv2.resizeWindow('cam2', 600, 400)
 
     # Create phase shift profilometry patterns
-    patterns, phase_shifts, frequencies = create_psp_templates(1920, 1080, [1, 4, 12, 48, 90], vertical=vertical)
+    patterns, phase_shifts, frequencies = create_psp_templates(1920, 1080, [1, 4, 12, 48, 90, 145], vertical=vertical)
 
     # List to store captured images
     images1 = []
@@ -365,18 +365,30 @@ if __name__ == '__main__':
             calibrate_projector(cameras, projector)
 
         elif (choice == 3):
-            test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1)
+            test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1, vertical=False)
             MinMaxProjectorCalibration(test_pattern, cameras, projector)
 
         elif (choice == 4):
             measurements_h = capture_measurement_images(cameras, projector, vertical=False)
             measurements_v = capture_measurement_images(cameras, projector, vertical=True)
-            
+
+            i = 1
+            k = 0
+            for measurements in [*measurements_h, *measurements_v]:
+                k += 1
+                calculate_phase_for_fppmeasurement(measurements)
+                get_phase_field_ROI(measurements, i)
+                if k == 2:
+                    i += 1
+                    k = 0
+        
             with open(config.DATA_PATH + r'/calibrated_data.json', 'r') as fp:
                 calibration_data = json.load(fp)
 
+            LUT = get_phase_field_LUT(measurements_h[-1], measurements_v[-1])
+
             # Process FPPMeasurements with phasogrammetry approach
-            points_3d, _, _ = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data)
+            points_3d, _, _, _, _ = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
 
             # Plot 3D point cloud
             fig = plt.figure()
