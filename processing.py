@@ -378,41 +378,51 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
             # Get mean value for x, y coordinate for points from LUT as second approximation
             x, y = np.mean(cor_points, axis=0)
 
-            # Get neareast coords to x and y
-            if int(np.round(x)) - x == 0:
-                x1 = int(x - 1)
-                x2 = int(x + 1)
-            else:
-                x1 = int(np.floor(x))
-                x2 = int(np.ceil(x))
+            iter_num = 0
 
-            if int(np.round(y)) - y == 0:
-                y1 = int(y - 1)
-                y2 = int(y + 1)
-            else:
-                y1 = int(np.floor(y))
-                y2 = int(np.ceil(y))
+            # Iterate thru variants of x and y where fields are near to phase_v and phase_h
+            while iter_num < 5: 
+                # Get neareast coords to current values of x and y
+                if int(np.round(x)) - x == 0:
+                    x1 = int(x - 1)
+                    x2 = int(x + 1)
+                else:
+                    x1 = int(np.floor(x))
+                    x2 = int(np.ceil(x))
 
-            # If coords are positive
-            if x1 > 0  and x2 > 0 and y1 > 0 and y2 > 0:
+                if int(np.round(y)) - y == 0:
+                    y1 = int(y - 1)
+                    y2 = int(y + 1)
+                else:
+                    y1 = int(np.floor(y))
+                    y2 = int(np.ceil(y))
+  
+                # Check if coords are on field (are positive and less than field shape)
+                if x1 > 0 and x2 > 0 and y1 > 0 and y2 > 0 and x1 < p1_h.shape[1] and x2 < p1_h.shape[1] and y1 < p1_h.shape[0] and y2 < p1_h.shape[0]:
 
-                # Get coeficients for bilinear interploation for horizontal phase
-                aa = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_h[y1, x1]), (x1, y2, p2_h[y2, x1]),
-                                                                   (x2, y2, p2_h[y2, x2]), (x2, y1, p2_h[y2, x1])))
-                # Get coeficients for bilinear interploation for vertical phase
-                bb = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_v[y1, x1]), (x1, y2, p2_v[y2, x1]),
-                                                                   (x2, y2, p2_v[y2, x2]), (x2, y1, p2_v[y2, x1])))
+                    # Get coeficients for bilinear interploation for horizontal phase
+                    aa = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_h[y1, x1]), (x1, y2, p2_h[y2, x1]),
+                                                                    (x2, y2, p2_h[y2, x2]), (x2, y1, p2_h[y2, x1])))
+                    # Get coeficients for bilinear interploation for vertical phase
+                    bb = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_v[y1, x1]), (x1, y2, p2_v[y2, x1]),
+                                                                    (x2, y2, p2_v[y2, x2]), (x2, y1, p2_v[y2, x1])))
 
-                # Find there bilinear interploation is equal to phase_h and phase_v
-                x, y =  fsolve(bilinear_phase_fields_approximation, (x1, y1), args=(aa, bb, phase_h, phase_v))
+                    # Find there bilinear interploation is equal to phase_h and phase_v
+                    x, y =  fsolve(bilinear_phase_fields_approximation, (x1, y1), args=(aa, bb, phase_h, phase_v))
 
-                # TODO: Return residiuals from function
-                # Calculate residiuals
-                # h_res, v_res = bilinear_phase_fields_approximation((x, y), aa, bb, phase_h, phase_v) 
+                    # TODO: Return residiuals from function
+                    # Calculate residiuals
+                    h_res, v_res = bilinear_phase_fields_approximation((x, y), aa, bb, phase_h, phase_v) 
 
-                return x, y
-            else:
-                return -1, -1
+                    # Check if x and y are between x1, x2, y1 and y2
+                    if x2 > x > x1 and y2 > y > y1:
+                        return x, y
+                    else:
+                        iter_num = iter_num + 1
+                else:
+                    return -1, -1
+
+            return -1, -1
         else:
             return -1, -1
 

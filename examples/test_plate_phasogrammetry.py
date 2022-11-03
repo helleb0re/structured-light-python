@@ -56,13 +56,13 @@ if __name__ == '__main__':
 
     # Plot unwrapped phases
     plt.subplot(221)
-    plt.imshow(measurements_h[0].unwrapped_phases[-3], cmap='gray')
+    plt.imshow(measurements_h[0].unwrapped_phases[-1], cmap='gray')
     plt.subplot(222)
-    plt.imshow(measurements_h[1].unwrapped_phases[-3], cmap='gray')
+    plt.imshow(measurements_h[1].unwrapped_phases[-1], cmap='gray')
     plt.subplot(223)
-    plt.imshow(measurements_v[0].unwrapped_phases[-3], cmap='gray')
+    plt.imshow(measurements_v[0].unwrapped_phases[-1], cmap='gray')
     plt.subplot(224)
-    plt.imshow(measurements_v[1].unwrapped_phases[-3], cmap='gray')
+    plt.imshow(measurements_v[1].unwrapped_phases[-1], cmap='gray')
     plt.show()
 
     print('Determine phase fields ROI...', end='', flush=True)
@@ -93,8 +93,9 @@ if __name__ == '__main__':
     print('Done')
 
     # Process FPPMeasurements with phasogrammetry approach
-    print('Calculate 2D corresponding points with phasogrammetry approach...', end='', flush=True)
-    points_2d_1, points_2d_2 = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, 20, 20, LUT)
+    print('Calculate 2D corresponding points with phasogrammetry approach...')
+    points_2d_1, points_2d_2 = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, 5, 5, LUT)
+    print(f'Found {points_2d_1.shape[0]} corresponding points')
     print('Done')
 
     print('Calculate 3D points with triangulation...')
@@ -103,25 +104,28 @@ if __name__ == '__main__':
     print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
     print('Done')
 
-    print('Fit points to plane')
+    print('\nFit points to plane')
     fit = fit_to_plane(points_3d[:,0], points_3d[:,1], points_3d[:,2])
     distance_to_plane = np.abs(points_3d[:, 2] - (fit[0] * points_3d[:, 0] + fit[1] * points_3d[:, 1] + fit[2]))
     
-    print(f'Fitting deviation std = {np.std(distance_to_plane)} mm')
-    print(f'Fitting deviation mean = {np.mean(distance_to_plane)} mm')
+    print(f'Fitting deviation mean = {np.mean(distance_to_plane):.4f} mm')
+    print(f'Fitting deviation max = {np.max(distance_to_plane):.4f} mm')
+    print(f'Fitting deviation std = {np.std(distance_to_plane):.4f} mm')
 
     # plt.hist(distance_to_plane, 30)
     # plt.show()
 
-    # Filter outliers
+    # Filter outliers by reprojection error
     reproj_err_threshold = 1.0 # pixel
 
-    print('Try to filter outliers')
-    x = points_3d[reproj_err1 < reproj_err_threshold, 0]
-    y = points_3d[reproj_err1 < reproj_err_threshold, 1]
-    z = points_3d[reproj_err1 < reproj_err_threshold, 2]
-    points_2d_1 = points_2d_1[reproj_err1 < reproj_err_threshold,:]
-    points_2d_2 = points_2d_2[reproj_err1 < reproj_err_threshold,:]
+    print('\nTry to filter outliers...')
+    filter_condition = (reproj_err1 < reproj_err_threshold) & (reproj_err2 < reproj_err_threshold)
+    x = points_3d[filter_condition, 0]
+    y = points_3d[filter_condition, 1]
+    z = points_3d[filter_condition, 2]
+    points_2d_1 = points_2d_1[filter_condition,:]
+    points_2d_2 = points_2d_2[filter_condition,:]
+    print(f'Found {points_3d.shape[0] - x.shape[0]} outliers')
 
     print('Calculate 3D points with triangulation without outliers...')
     points_3d, rms1, rms2, reproj_err1, reproj_err2 = triangulate_points(calibration_data, points_2d_1, points_2d_2)
@@ -129,11 +133,12 @@ if __name__ == '__main__':
     print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
     print('Done')
 
-    print('Fit points to plane without outliers')
+    print('\nFit points to plane without outliers')
     fit2 = fit_to_plane(x, y, z)
     distance_to_plane = np.abs(z - (fit2[0] * x + fit2[1] * y + fit2[2]))
-    print(f'Fitting deviation std = {np.std(distance_to_plane)} mm')
-    print(f'Fitting deviation mean = {np.mean(distance_to_plane)} mm')
+    print(f'Fitting deviation mean = {np.mean(distance_to_plane):.4f} mm')
+    print(f'Fitting deviation max = {np.max(distance_to_plane):.4f} mm')
+    print(f'Fitting deviation std = {np.std(distance_to_plane):.4f} mm\n')
 
     # plt.hist(distance_to_plane, 30)
     # plt.show()
