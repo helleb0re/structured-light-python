@@ -12,7 +12,7 @@ class FPPMeasurement:
     '''Class to store FPP measurement data'''
     frequencies: list[float]
     shifts: list[float]
-    imgs_file_names: list[list[str]] = field(init=False)
+    imgs_file_names: list[list[str]]
     phases: Optional[list[np.ndarray]] = field(init=False)
     unwrapped_phases: Optional[list[np.ndarray]] = field(init=False)
     average_intensities: Optional[list[np.ndarray]] = field(init=False)
