@@ -28,12 +28,14 @@ class CameraBaumer(Camera):
                 camera = CameraBaumer(neoapi.Cam())
 
                 # Set default cameras parameters
-                camera.exposure = 20000
+                camera.exposure = 80000
+                camera.gain = 4
                 camera.frame_rate_enable = True
                 camera.frame_rate = 25.0
 
                 # Set first camera as master for triggering
                 if i == 0:
+                    camera.trigger_mode = neoapi.TriggerMode_Off
                     camera.line_selector = neoapi.LineSelector_Line1
                     camera.line_mode = neoapi.LineMode_Output
                     camera.line_source = neoapi.LineSource_ExposureActive
