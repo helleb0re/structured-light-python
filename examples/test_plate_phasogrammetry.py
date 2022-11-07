@@ -10,7 +10,7 @@ from matplotlib import pyplot as plt
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import config
-
+from fpp_structures import PhaseShiftingAlgorithm
 from processing import calculate_phase_for_fppmeasurement, process_fppmeasurement_with_phasogrammetry, get_phase_field_ROI, get_phase_field_LUT, triangulate_points
 from utils import load_fpp_measurements
 
@@ -34,9 +34,18 @@ if __name__ == '__main__':
 
     # Load FPPMeasurements from files
     print('Load FPPMeasurements from files...', end='', flush=True)
-    measurements_h = load_fpp_measurements(r'.\data\01-11-2022_17-55-30\measure_01-11-2022_17-55-30.json')
-    measurements_v = load_fpp_measurements(r'.\data\01-11-2022_17-55-40\measure_01-11-2022_17-55-40.json')
+    measurements_h = load_fpp_measurements(r'.\data\01-11-2022_17-55-30\fpp_measurement.json')
+    measurements_v = load_fpp_measurements(r'.\data\01-11-2022_17-55-40\fpp_measurement.json')
     print('Done')
+
+    # Display FPPMeasurement parameters
+    if measurements_h[0].phase_shifting_type == PhaseShiftingAlgorithm.n_step:
+        algortihm_type = f'{len(measurements_h[0].shifts)}-step' 
+    elif measurements_h[0].phase_shifting_type == PhaseShiftingAlgorithm.double_three_step:
+        algortihm_type = 'double 3-step'
+    print(f'\nPhase shift algorithm: {algortihm_type}')
+    print(f'Phase shifts: {measurements_h[0].shifts}')
+    print(f'Frequencies: {measurements_h[0].frequencies}\n')
 
     # Load calibration data for cameras stero system
     print('Load calibration data for cameras stereo system...', end='', flush=True)
@@ -118,7 +127,7 @@ if __name__ == '__main__':
     # Filter outliers by reprojection error
     reproj_err_threshold = 1.0 # pixel
 
-    print('\nTry to filter outliers...')
+    print('\nTry to filter outliers with reprojection error threshold...')
     filter_condition = (reproj_err1 < reproj_err_threshold) & (reproj_err2 < reproj_err_threshold)
     x = points_3d[filter_condition, 0]
     y = points_3d[filter_condition, 1]
@@ -140,10 +149,26 @@ if __name__ == '__main__':
     print(f'Fitting deviation max = {np.max(distance_to_plane):.4f} mm')
     print(f'Fitting deviation std = {np.std(distance_to_plane):.4f} mm\n')
 
+    print('\nTry to filter outliers with distance to fitted surface...')
+    filter_condition = distance_to_plane < 3*np.std(distance_to_plane)
+    x = points_3d[filter_condition, 0]
+    y = points_3d[filter_condition, 1]
+    z = points_3d[filter_condition, 2]
+    points_2d_1 = points_2d_1[filter_condition,:]
+    points_2d_2 = points_2d_2[filter_condition,:]
+    print(f'Found {points_3d.shape[0] - x.shape[0]} outliers')
+
+    print('\nFit points to plane without outliers')
+    fit2 = fit_to_plane(x, y, z)
+    distance_to_plane = np.abs(z - (fit2[0] * x + fit2[1] * y + fit2[2]))
+    print(f'Fitting deviation mean = {np.mean(distance_to_plane):.4f} mm')
+    print(f'Fitting deviation max = {np.max(distance_to_plane):.4f} mm')
+    print(f'Fitting deviation std = {np.std(distance_to_plane):.4f} mm\n')
+
     # plt.hist(distance_to_plane, 30)
     # plt.show()
 
-     # Plot 3D point cloud
+    # Plot 3D point cloud
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
