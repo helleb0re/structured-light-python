@@ -30,80 +30,71 @@ def fit_to_plane(x, y, z):
     return fit
 
 
-if __name__ == '__main__':
-
-    # Load FPPMeasurements from files
-    print('Load FPPMeasurements from files...', end='', flush=True)
-    measurements_h = load_fpp_measurements(r'.\data\01-11-2022_17-55-30\fpp_measurement.json')
-    measurements_v = load_fpp_measurements(r'.\data\01-11-2022_17-55-40\fpp_measurement.json')
-    print('Done')
-
+def main_func(measurement):
     # Display FPPMeasurement parameters
-    if measurements_h[0].phase_shifting_type == PhaseShiftingAlgorithm.n_step:
-        algortihm_type = f'{len(measurements_h[0].shifts)}-step' 
-    elif measurements_h[0].phase_shifting_type == PhaseShiftingAlgorithm.double_three_step:
+    if measurement.phase_shifting_type == PhaseShiftingAlgorithm.n_step:
+        algortihm_type = f'{len(measurement.shifts)}-step' 
+    elif measurement.phase_shifting_type == PhaseShiftingAlgorithm.double_three_step:
         algortihm_type = 'double 3-step'
     print(f'\nPhase shift algorithm: {algortihm_type}')
-    print(f'Phase shifts: {measurements_h[0].shifts}')
-    print(f'Frequencies: {measurements_h[0].frequencies}\n')
+    print(f'Phase shifts: {measurement.shifts}')
+    print(f'Frequencies: {measurement.frequencies}\n')
 
     # Load calibration data for cameras stero system
     print('Load calibration data for cameras stereo system...', end='', flush=True)
-    with open(config.DATA_PATH + r'/calibrated_data_01-11-2022.json', 'r') as fp:
+    with open(config.DATA_PATH + r'/calibrated_data.json', 'r') as fp:
         calibration_data = json.load(fp)
     print('Done')
 
     # Calculate phase fields
-    print('Calculate phase fields for first camera...', end='', flush=True)
-    calculate_phase_for_fppmeasurement(measurements_h[0])
-    calculate_phase_for_fppmeasurement(measurements_h[1])
+    print('Calculate phase fields for first and second cameras...', end='', flush=True)
+    calculate_phase_for_fppmeasurement(measurement)
     print('Done')
-    print('Calcalute phase fields for second camera...', end='', flush=True)
-    calculate_phase_for_fppmeasurement(measurements_v[0])
-    calculate_phase_for_fppmeasurement(measurements_v[1])
-    print('Done')
+    # print('Calcalute phase fields for second camera...', end='', flush=True)
+    # calculate_phase_for_fppmeasurement(measurements_v[0])
+    # calculate_phase_for_fppmeasurement(measurements_v[1])
+    # print('Done')
 
     # Plot unwrapped phases
     plt.subplot(221)
-    plt.imshow(measurements_h[0].unwrapped_phases[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[0].unwrapped_phases[-1], cmap='gray')
     plt.subplot(222)
-    plt.imshow(measurements_h[1].unwrapped_phases[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[1].unwrapped_phases[-1], cmap='gray')
     plt.subplot(223)
-    plt.imshow(measurements_v[0].unwrapped_phases[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[2].unwrapped_phases[-1], cmap='gray')
     plt.subplot(224)
-    plt.imshow(measurements_v[1].unwrapped_phases[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[3].unwrapped_phases[-1], cmap='gray')
     plt.show()
 
     print('Determine phase fields ROI...', end='', flush=True)
-    get_phase_field_ROI(measurements_h[0])
-    get_phase_field_ROI(measurements_h[1])
+    get_phase_field_ROI(measurement)
     print('Done')
 
     # Set ROI manually for test plate
-    measurements_h[0].ROI = np.array([[470, 230], [1420, 170], [1350, 1150], [520, 1350]], dtype = "float32")
+    measurement.camera_results[0].ROI = np.array([[470, 230], [1420, 170], [1350, 1150], [520, 1350]], dtype = "float32")
 
     # Plot signal to noise ration
     plt.subplot(221)
-    plt.imshow(measurements_h[0].modulated_intensities[-1]/measurements_h[0].average_intensities[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[0].modulated_intensities[-1]/measurement.camera_results[0].average_intensities[-1], cmap='gray')
     # Draw ROI
-    plt.plot(measurements_h[0].ROI[:, 0], measurements_h[0].ROI[:, 1], 'r-')
-    plt.plot([measurements_h[0].ROI[-1, 0], measurements_h[0].ROI[0, 0]],
-             [measurements_h[0].ROI[-1, 1], measurements_h[0].ROI[0, 1]], 'r-')
+    plt.plot(measurement.camera_results[0].ROI[:, 0], measurement.camera_results[0].ROI[:, 1], 'r-')
+    plt.plot([measurement.camera_results[0].ROI[-1, 0], measurement.camera_results[0].ROI[0, 0]],
+             [measurement.camera_results[0].ROI[-1, 1], measurement.camera_results[0].ROI[0, 1]], 'r-')
     plt.subplot(222)
-    plt.imshow(measurements_h[1].modulated_intensities[-1]/measurements_h[1].average_intensities[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[1].modulated_intensities[-1]/measurement.camera_results[1].average_intensities[-1], cmap='gray')
     plt.subplot(223)
-    plt.imshow(measurements_v[0].modulated_intensities[-1]/measurements_v[0].average_intensities[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[2].modulated_intensities[-1]/measurement.camera_results[2].average_intensities[-1], cmap='gray')
     plt.subplot(224)
-    plt.imshow(measurements_v[1].modulated_intensities[-1]/measurements_v[1].average_intensities[-1], cmap='gray')
+    plt.imshow(measurement.camera_results[3].modulated_intensities[-1]/measurement.camera_results[3].average_intensities[-1], cmap='gray')
     plt.show()
 
     print('Calculate phase fields LUT...', end='', flush=True)
-    LUT = get_phase_field_LUT(measurements_h[1], measurements_v[1])
+    LUT = get_phase_field_LUT(measurement.camera_results[3], measurement.camera_results[1])
     print('Done')
 
     # Process FPPMeasurements with phasogrammetry approach
     print('Calculate 2D corresponding points with phasogrammetry approach...')
-    points_2d_1, points_2d_2 = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, 5, 5, LUT)
+    points_2d_1, points_2d_2 = process_fppmeasurement_with_phasogrammetry(measurement, 5, 5, LUT)
     print(f'Found {points_2d_1.shape[0]} corresponding points')
     print('Done')
 
@@ -187,3 +178,15 @@ if __name__ == '__main__':
     plt.tricontourf(x, y, distance_to_plane, levels=100)
     plt.colorbar()
     plt.show()
+
+
+if __name__ == '__main__':
+
+    # Load FPPMeasurements from files
+    print('Load FPPMeasurements from files...', end='', flush=True)
+    # measurements_h = load_fpp_measurements(r'.\data\01-11-2022_17-55-30\fpp_measurement.json')
+    # measurements_v = load_fpp_measurements(r'.\data\01-11-2022_17-55-40\fpp_measurement.json')
+    measurement = load_fpp_measurements(config.LAST_MEASUREMENT_PATH + r'\fpp_measurement.json')
+    print('Done')
+
+    main_func(measurement)

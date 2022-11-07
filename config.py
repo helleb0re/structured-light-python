@@ -41,7 +41,7 @@ CAMERA_GAMMA = [1, 1]
 DATA_PATH = './data'
 
 # Images filenames mask
-IMAGES_FILENAME_MASK = 'frame_{0}_{1}.png'
+IMAGES_FILENAME_MASK = 'frame_{2}_{0}_{1}.png'
 
 # Measurement filenames mask
 MEASUREMENT_FILENAME_MASK = 'fpp_measurement.json'

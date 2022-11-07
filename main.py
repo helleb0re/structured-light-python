@@ -18,9 +18,10 @@ from camera_simulated import CameraSimulated
 from create_patterns import create_psp_templates
 from hand_set_up_camera import camera_adjust, camera_baumer_adjust
 from min_max_projector_calibration import MinMaxProjectorCalibration
-from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
+from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm, CameraMeasurement
 from processing import process_fppmeasurement_with_phasogrammetry, calculate_phase_for_fppmeasurement, get_phase_field_ROI, get_phase_field_LUT, calculate_displacement_field
 
+from examples.test_plate_phasogrammetry import main_func
 
 def initialize_cameras(cam_type: str, cam_to_found_number: int=2) -> list[Camera]:
     '''
@@ -198,7 +199,7 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
     return brightness1, brightness2
 
 
-def capture_measurement_images(cameras: list[Camera], projector: Projector, vertical: bool, phase_shift_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step) -> tuple[FPPMeasurement, FPPMeasurement]:
+def capture_measurement_images(cameras: list[Camera], projector: Projector, phase_shift_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step) -> tuple[FPPMeasurement, FPPMeasurement]:
     '''
     Do fringe projection measurement. Generate pattern, project them via projector and capture images with cameras.
 
@@ -217,83 +218,98 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
     cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam2', 600, 400)
 
-    # Create phase shift profilometry patterns
-    patterns, phase_shifts, frequencies = create_psp_templates(1280, 720, [1, 12, 48, 138], phase_shift_type, vertical=vertical)
+    frequencies = [1, 12, 48, 138]
 
-    # List to store captured images
-    images1 = []
-    images2 = []
+    # Create phase shift profilometry patterns
+    patterns_v, _ = create_psp_templates(1280, 720, frequencies, phase_shift_type, vertical=True)
+    patterns_h, phase_shifts = create_psp_templates(1280, 720, frequencies, phase_shift_type, vertical=False)
+
+    patterns_vh = {'vertical': patterns_v, 'horizontal': patterns_h}
+
+    cam_results = [
+        CameraMeasurement(
+            fringe_orientation='vertical'
+        ),
+        CameraMeasurement(
+            fringe_orientation='vertical'
+        ),
+        CameraMeasurement(
+            fringe_orientation='horizontal'
+        ),
+        CameraMeasurement(
+            fringe_orientation='horizontal'
+        )
+    ]
+    
+    # Create FPPMeasurement instance with results
+    meas = FPPMeasurement(
+        phase_shift_type,
+        frequencies,
+        phase_shifts,
+        cam_results        
+    )
 
     # Create folders to save measurement results if defined in config
     if config.SAVE_MEASUREMENT_IMAGE_FILES:
-        filenames1 = []
-        filenames2 = []
         measure_name = f'{datetime.now():%d-%m-%Y_%H-%M-%S}'
-        os.makedirs(f'{config.DATA_PATH}/{measure_name}/')
-        os.makedirs(f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/')
-        os.makedirs(f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/')
+        last_measurement_path = f'{config.DATA_PATH}/{measure_name}'
+        os.makedirs(f'{last_measurement_path}/')
+        os.makedirs(f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[0]}/')
+        os.makedirs(f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[1]}/')
 
     # Set up projector
     projector.set_up_window()
 
-    # Iter thru generated patterns
-    for i in range(len(patterns)):
-
-        if config.SAVE_MEASUREMENT_IMAGE_FILES:
-            fn_for_one_freq1 = []
-            fn_for_one_freq2 = []
-
-        img_for_one_freq1 = []
-        img_for_one_freq2 = []
-
-        # Iter thru pattern with phase shifts for one frequency
-        for j in range(len(patterns[i])):
-            # Project pattern
-            projector.project_pattern(patterns[i][j])
-
-            # Capture one frame before measurement for wecams
-            if cameras[0].type == 'web':
-                _1 = cameras[0].get_image()
-            if cameras[1].type == 'web':
-                _2 = cameras[1].get_image()
-
-            # Wait delay time before pattern projected and images captures
-            cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
-
-            # Capture images
-            frame_1 = cameras[0].get_image()
-            frame_2 = cameras[1].get_image()
-
-            cv2.imshow('cam1', frame_1)
-            cv2.imshow('cam2', frame_2)
-
-            # Save images if defined in config
-            if config.SAVE_MEASUREMENT_IMAGE_FILES:
-                last_measurement_path = f'{config.DATA_PATH}/{measure_name}'
-                filename1 = f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
-                filename2 = f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
-                saved1 = cv2.imwrite(filename1, frame_1)
-                saved2 = cv2.imwrite(filename2, frame_2)
-
-                # Store saved images filenames
-                if saved1 and saved2:
-                    fn_for_one_freq1.append(filename1)
-                    fn_for_one_freq2.append(filename2)
-                else:
-                    raise Exception('Error during image saving!')
-
-            # Store images for one frequency in one list 
-            img_for_one_freq1.append(frame_1)
-            img_for_one_freq2.append(frame_2)
-
-        # Store saved images filenames for one frequency
-        if config.SAVE_MEASUREMENT_IMAGE_FILES:
-            filenames1.append(fn_for_one_freq1)
-            filenames2.append(fn_for_one_freq2)
+    for res1, res2 in ((cam_results[0], cam_results[1]), (cam_results[2], cam_results[3])):
         
-        # Store list of images for one frequency in total set images list
-        images1.append(img_for_one_freq1)
-        images2.append(img_for_one_freq2)
+        orientation = res1.fringe_orientation
+        patterns = patterns_vh[orientation]
+        
+        # Iter thru generated patterns
+        for i in range(len(patterns)):
+
+            if config.SAVE_MEASUREMENT_IMAGE_FILES:
+                res1.imgs_file_names.append([])
+                res2.imgs_file_names.append([])
+            else:
+                res1.imgs_list.append([])
+                res2.imgs_list.append([])
+
+            for j in range(len(patterns[i])):
+                projector.project_pattern(patterns[i][j])
+
+                # Capture one frame before measurement for wecams
+                if cameras[0].type == 'web':
+                    cameras[0].get_image()
+                if cameras[1].type == 'web':
+                    cameras[1].get_image()
+
+                # Wait delay time before pattern projected and images captures
+                cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
+
+                # Capture images
+                frame_1 = cameras[0].get_image()
+                frame_2 = cameras[1].get_image()
+
+                cv2.imshow('cam1', frame_1)
+                cv2.imshow('cam2', frame_2)
+
+                # Save images if defined in config
+                if config.SAVE_MEASUREMENT_IMAGE_FILES:
+                    filename1 = f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j, orientation)
+                    filename2 = f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j, orientation)
+                    saved1 = cv2.imwrite(filename1, frame_1)
+                    saved2 = cv2.imwrite(filename2, frame_2)
+
+                    # Store saved images filenames
+                    if saved1 and saved2:
+                        res1.imgs_file_names[-1].append(filename1)
+                        res2.imgs_file_names[-1].append(filename2)
+                    else:
+                        raise Exception('Error during image saving!')
+                else:
+                    res1.imgs_list[-1].append(frame_1)
+                    res2.imgs_list[-1].append(frame_1)
     
     # Stop projector
     projector.close_window()
@@ -302,33 +318,14 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
     cv2.destroyWindow('cam1')
     cv2.destroyWindow('cam2')
 
-    # Create FPPMeasurement instances with results
-    meas1 = FPPMeasurement(
-        frequencies,
-        phase_shifts,
-        filenames1 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
-        'vertical' if vertical else 'horizontal', 
-        imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images1,
-    )
-    meas2 = FPPMeasurement(
-        frequencies,
-        phase_shifts,
-        filenames2 if config.SAVE_MEASUREMENT_IMAGE_FILES else [],
-        'vertical' if vertical else 'horizontal', 
-        imgs_list=None if config.SAVE_MEASUREMENT_IMAGE_FILES else images2
-    )
-
-    meas1.phase_shifting_type = phase_shift_type
-    meas2.phase_shifting_type = phase_shift_type
-
     # Save results of measurement in json file if defined in config
     if config.SAVE_MEASUREMENT_IMAGE_FILES:        
         with open(f'{last_measurement_path}/' + config.MEASUREMENT_FILENAME_MASK.format(measure_name), 'x') as f:
-            json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
+            json.dump(meas, f, ensure_ascii=False, indent=4, default=vars)
         config.LAST_MEASUREMENT_PATH = last_measurement_path
         config.save_calibration_data()
 
-    return [meas1, meas2]
+    return meas
 
 
 if __name__ == '__main__':
@@ -375,5 +372,5 @@ if __name__ == '__main__':
             MinMaxProjectorCalibration(test_pattern, cameras, projector)
 
         elif (choice == 4):
-            measurements_h = capture_measurement_images(cameras, projector, vertical=False, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)
-            measurements_v = capture_measurement_images(cameras, projector, vertical=True, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)
+            measurement = capture_measurement_images(cameras, projector, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)            
+            main_func(measurement)

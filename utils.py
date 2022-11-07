@@ -7,8 +7,9 @@ import json
 
 import numpy as np
 from matplotlib import pyplot as plt
+import cv2
 
-from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
+from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm, CameraMeasurement
 
 
 def create_fpp_measurement_from_files(files_path : str, file_mask : str, shifts_count : int, frequencies : list[float]) -> FPPMeasurement:
@@ -49,7 +50,7 @@ def create_fpp_measurement_from_files(files_path : str, file_mask : str, shifts_
     return measurement
 
 
-def load_fpp_measurements(file: str) -> list[FPPMeasurement]:
+def load_fpp_measurements(file: str) -> FPPMeasurement:
     '''
     Load FPPMeasurements from json file
     
@@ -59,27 +60,40 @@ def load_fpp_measurements(file: str) -> list[FPPMeasurement]:
     Returns:
         measurements (list[FPPMeasurement]): list of FPPMeasurement instances loaded from file
     '''
-    measurements = []
 
     with open(file, 'r') as fp:
         data = json.load(fp)
 
-    for instance in data:
-        # Create new FPPMeasurement instance
-        measurement = FPPMeasurement(
-            shifts = instance['shifts'],
-            frequencies = instance['frequencies'],
-            fringe_orientation = instance['fringe_orientation'],
-            imgs_file_names =   instance['imgs_file_names']
-        )
-        # Try get value of phase shifting algorithm enum, 1 is default 
-        ps_algorithm_value = instance.get('phase_shifting_type', 1)
-        measurement.phase_shifting_type = PhaseShiftingAlgorithm(ps_algorithm_value)
+    # for instance in data:
+    #     # Create new FPPMeasurement instance
+    measurement = FPPMeasurement(
+        phase_shifting_type=PhaseShiftingAlgorithm(data.get('phase_shifting_type', 1)),
+        shifts = data['shifts'],
+        frequencies = data['frequencies'],
+        camera_results= [
+            CameraMeasurement(
+                fringe_orientation=data['camera_results'][0]['fringe_orientation'],
+                imgs_list=get_images_from_config(data['camera_results'][0]['imgs_file_names'])
+            ),
+            CameraMeasurement(
+                fringe_orientation=data['camera_results'][1]['fringe_orientation'],
+                imgs_list=get_images_from_config(data['camera_results'][1]['imgs_file_names'])
+            ),
+            CameraMeasurement(
+                fringe_orientation=data['camera_results'][2]['fringe_orientation'],
+                imgs_list=get_images_from_config(data['camera_results'][2]['imgs_file_names'])
+            ),
+            CameraMeasurement(
+                fringe_orientation=data['camera_results'][3]['fringe_orientation'],
+                imgs_list=get_images_from_config(data['camera_results'][3]['imgs_file_names'])
+            )
+        ]
+    )
 
-        measurements.append(measurement)
+    return measurement
 
-    return measurements 
-
+def get_images_from_config(store):
+    return [[cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2GRAY) for path in store[i]] for i in range(len(store))]
 
 def get_quiverplot(coords: np.ndarray, maximums: np.ndarray, image: Optional[np.ndarray] = None, stretch_factor: float = 5.0):
     """Draw a vector field of displacements on input image (if defined)

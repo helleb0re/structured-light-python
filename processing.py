@@ -155,45 +155,46 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
         measurement (FPPMeasurement): FPP measurement instance
     '''
     # Load measurement data
-    shifts_count = measurement.shifts_count
+    shifts_count = len(measurement.shifts)
     frequencies = measurement.frequencies
-    frequency_counts = measurement.frequency_counts
-    images = measurement.imgs_list
+    frequency_counts = len(measurement.frequencies)
 
-    phases = []
-    unwrapped_phases = []
-    avg_ints = []
-    mod_ints = []
+    for res in measurement.camera_results:
+        phases = []
+        unwrapped_phases = []
+        avg_ints = []
+        mod_ints = []
+        images = res.imgs_list
 
-    for i in range(frequency_counts):
-        images_for_one_frequency = []
+        for i in range(frequency_counts):
+            images_for_one_frequency = []
 
-        if images is None:
-            for j in range(shifts_count):
-                im = load_image(measurement.imgs_file_names[i][j])
-                images_for_one_frequency.append(im)
-        else:
+            # if images is None:
+            #     for j in range(shifts_count):
+            #         im = load_image(measurement.imgs_file_names[i][j])
+            #         images_for_one_frequency.append(im)
+            # else:
             images_for_one_frequency = images[i]
 
-        phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, measurement.shifts, measurement.frequencies[i], phase_shifting_type=measurement.phase_shifting_type)
+            phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, measurement.shifts, measurement.frequencies[i], phase_shifting_type=measurement.phase_shifting_type)
 
-        mask = np.where(mod_int > 5, 1, 0) 
-        phase = phase * mask
+            mask = np.where(mod_int > 5, 1, 0) 
+            phase = phase * mask
 
-        phases.append(phase)
-        avg_ints.append(avg_int)
-        mod_ints.append(mod_int)
-        
-        if i == 0:
-            unwrapped_phases.append(phase)
-        else:
-            unwrapped_phase = calculate_unwraped_phase(unwrapped_phases[i-1], phases[i], 1 / frequencies[i-1], 1 / frequencies[i])
-            unwrapped_phases.append(unwrapped_phase)
+            phases.append(phase)
+            avg_ints.append(avg_int)
+            mod_ints.append(mod_int)
+            
+            if i == 0:
+                unwrapped_phases.append(phase)
+            else:
+                unwrapped_phase = calculate_unwraped_phase(unwrapped_phases[i-1], phases[i], 1 / frequencies[i-1], 1 / frequencies[i])
+                unwrapped_phases.append(unwrapped_phase)
 
-    measurement.phases = phases
-    measurement.unwrapped_phases = unwrapped_phases
-    measurement.average_intensities = avg_ints
-    measurement.modulated_intensities = mod_ints
+        res.phases = phases
+        res.unwrapped_phases = unwrapped_phases
+        res.average_intensities = avg_ints
+        res.modulated_intensities = mod_ints
     
 
 def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_edges: bool = True) -> bool:
@@ -556,23 +557,24 @@ def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshol
         fpp_measurement (FPPMeasurement): FPP measurment for calcaulating ROI
         signal_to_nose_threshold (float) = 0.25: threshold for signal to noise ratio to calcaulate ROI
     '''
-    # Calculate signal to noise ratio
-    signal_to_nose = fpp_measurement.modulated_intensities[-1] / fpp_measurement.average_intensities[-1]
-    # Threshold signal to noise with defined threshold level
-    thresholded_coords = np.argwhere(signal_to_nose > signal_to_nose_threshold)
+    for res in fpp_measurement.camera_results:
+        # Calculate signal to noise ratio
+        signal_to_nose = res.modulated_intensities[-1] / res.average_intensities[-1]
+        # Threshold signal to noise with defined threshold level
+        thresholded_coords = np.argwhere(signal_to_nose > signal_to_nose_threshold)
 
-    # Store ROI mask
-    fpp_measurement.signal_to_noise_mask = np.zeros(signal_to_nose.shape, dtype=int)
-    fpp_measurement.signal_to_noise_mask[signal_to_nose > signal_to_nose_threshold] = 1
+        # Store ROI mask
+        res.signal_to_noise_mask = np.zeros(signal_to_nose.shape, dtype=int)
+        res.signal_to_noise_mask[signal_to_nose > signal_to_nose_threshold] = 1
 
-    # Determine four points around thresholded area
-    x_min = np.min(thresholded_coords[:,1])
-    x_max = np.max(thresholded_coords[:,1])
-    y_min = np.min(thresholded_coords[:,0])
-    y_max = np.max(thresholded_coords[:,0])
+        # Determine four points around thresholded area
+        x_min = np.min(thresholded_coords[:,1])
+        x_max = np.max(thresholded_coords[:,1])
+        y_min = np.min(thresholded_coords[:,0])
+        y_max = np.max(thresholded_coords[:,0])
 
-    # Store determined ROI
-    fpp_measurement.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
+        # Store determined ROI
+        res.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
 
 
 def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FPPMeasurement) -> list[list[list]]:
@@ -626,7 +628,7 @@ def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FP
     return LUT
 
 
-def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasurement], measurements_v: list[FPPMeasurement], step_x: float, step_y: float, LUT:list[list[list[int]]]=None) -> tuple[np.ndarray, np.ndarray]:
+def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step_x: float, step_y: float, LUT:list[list[list[int]]]=None) -> tuple[np.ndarray, np.ndarray]:
     '''
     Find 2D corresponding points for two phase fields sets with phasogrammetry approach 
 
@@ -640,18 +642,18 @@ def process_fppmeasurement_with_phasogrammetry(measurements_h: list[FPPMeasureme
         points_2 (numpy array [N, 2]): corresponding 2D points from second camera
     '''
     # Take phases with highest frequencies 
-    p1_h = measurements_h[0].unwrapped_phases[-1]
-    p2_h = measurements_h[1].unwrapped_phases[-1]
+    p1_h = measurement.camera_results[2].unwrapped_phases[-1]
+    p2_h = measurement.camera_results[3].unwrapped_phases[-1]
 
-    p1_v = measurements_v[0].unwrapped_phases[-1]
-    p2_v = measurements_v[1].unwrapped_phases[-1]
+    p1_v = measurement.camera_results[0].unwrapped_phases[-1]
+    p2_v = measurement.camera_results[1].unwrapped_phases[-1]
 
     # Get ROI from measurement object
-    ROI1 = measurements_h[0].ROI
+    ROI1 = measurement.camera_results[0].ROI
 
     # Cut ROI from phase fields for second camera
-    ROIx = slice(0, measurements_h[1].unwrapped_phases[-1].shape[1])
-    ROIy = slice(0, measurements_h[1].unwrapped_phases[-1].shape[0])
+    ROIx = slice(0, measurement.camera_results[1].unwrapped_phases[-1].shape[1])
+    ROIy = slice(0, measurement.camera_results[1].unwrapped_phases[-1].shape[0])
 
     p2_h = p2_h[ROIy, ROIx]
     p2_v = p2_v[ROIy, ROIx]
