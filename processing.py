@@ -203,6 +203,7 @@ def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_e
 
     Point is inside polygon if horisontal beam to the right
     from point crosses polygon even number of times. Works fine for non-convex polygons.
+    From: https://stackoverflow.com/questions/39660851/deciding-if-a-point-is-inside-a-polygon
 
     Args:
         x (int): horizontal point coordinate
