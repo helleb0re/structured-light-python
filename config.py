@@ -44,7 +44,7 @@ DATA_PATH = './data'
 IMAGES_FILENAME_MASK = 'frame_{0}_{1}.png'
 
 # Measurement filenames mask
-MEASUREMENT_FILENAME_MASK = 'measure_{0}.json'
+MEASUREMENT_FILENAME_MASK = 'fpp_measurement.json'
 
 # Cameras folders in measurment folder
 CAMERAS_FOLDER_NAMES = ['cam1', 'cam2']
@@ -63,6 +63,9 @@ USE_MULTIPROCESSING = False
 
 # Number of Pools to use in parallel processing
 POOLS_NUMBER = 5
+
+# Path to last measurement results
+LAST_MEASUREMENT_PATH = None
 
 
 # Load calibration data from json file
@@ -89,6 +92,11 @@ try:
                             float(calibration_data['cameras']['baumer'][1]['gamma'])]
         except:
             pass
+
+        try:
+            LAST_MEASUREMENT_PATH = calibration_data['measurements']['last_measurement_path']
+        except:
+            pass
 except:
     pass
 
@@ -109,6 +117,8 @@ def save_calibration_data() -> None:
             calibration_data["cameras"]["baumer"][i]["exposure"] = CAMERA_EXPOSURE[i]
             calibration_data["cameras"]["baumer"][i]["gain"] = CAMERA_GAIN[i]
             calibration_data["cameras"]["baumer"][i]["gamma"] = CAMERA_GAIN[i]
+
+        calibration_data['measurements']['last_measurement_path'] = LAST_MEASUREMENT_PATH
     except:
         pass
     else:

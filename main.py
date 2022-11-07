@@ -269,8 +269,9 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
 
             # Save images if defined in config
             if config.SAVE_MEASUREMENT_IMAGE_FILES:
-                filename1 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
-                filename2 = f'{config.DATA_PATH}/{measure_name}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
+                last_measurement_path = f'{config.DATA_PATH}/{measure_name}'
+                filename1 = f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[0]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
+                filename2 = f'{last_measurement_path}/{config.CAMERAS_FOLDER_NAMES[1]}/' + config.IMAGES_FILENAME_MASK.format(i, j)
                 saved1 = cv2.imwrite(filename1, frame_1)
                 saved2 = cv2.imwrite(filename2, frame_2)
 
@@ -321,9 +322,11 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, vert
     meas2.phase_shifting_type = phase_shift_type
 
     # Save results of measurement in json file if defined in config
-    if config.SAVE_MEASUREMENT_IMAGE_FILES:
-        with open(f'{config.DATA_PATH}/{measure_name}/' + config.MEASUREMENT_FILENAME_MASK.format(measure_name), 'x') as f:
+    if config.SAVE_MEASUREMENT_IMAGE_FILES:        
+        with open(f'{last_measurement_path}/' + config.MEASUREMENT_FILENAME_MASK.format(measure_name), 'x') as f:
             json.dump((meas1, meas2), f, ensure_ascii=False, indent=4, default=vars)
+        config.LAST_MEASUREMENT_PATH = last_measurement_path
+        config.save_calibration_data()
 
     return [meas1, meas2]
 
@@ -374,37 +377,3 @@ if __name__ == '__main__':
         elif (choice == 4):
             measurements_h = capture_measurement_images(cameras, projector, vertical=False, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)
             measurements_v = capture_measurement_images(cameras, projector, vertical=True, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)
-
-            # i = 1
-            # k = 0
-            # for measurements in [*measurements_h, *measurements_v]:
-            #     k += 1
-            #     calculate_phase_for_fppmeasurement(measurements)
-            #     get_phase_field_ROI(measurements, i)
-            #     if k == 2:
-            #         i += 1
-            #         k = 0
-        
-            # with open(config.DATA_PATH + r'/calibrated_data.json', 'r') as fp:
-            #     calibration_data = json.load(fp)
-
-            # LUT = get_phase_field_LUT(measurements_h[-1], measurements_v[-1])
-
-            # # Process FPPMeasurements with phasogrammetry approach
-            # points_3d, _, _, _, _ = process_fppmeasurement_with_phasogrammetry(measurements_h, measurements_v, calibration_data, LUT)
-
-            # # Plot 3D point cloud
-            # fig = plt.figure()
-            # ax = fig.add_subplot(111, projection='3d')
-
-            # ax.scatter(points_3d[:,0,0], points_3d[:,0,1], points_3d[:,0,2])
-
-            # ax.set_xlabel('X Label')
-            # ax.set_ylabel('Y Label')
-            # ax.set_zlabel('Z Label')
-
-            # ax.set_ylim(ax.get_xlim())
-
-            # ax.view_init(elev=-75, azim=-89)
-
-            # plt.show()
