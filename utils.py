@@ -58,16 +58,13 @@ def load_fpp_measurements(file: str) -> FPPMeasurement:
         file (str): the path to FPPMeasurements json file 
 
     Returns:
-        measurements (list[FPPMeasurement]): list of FPPMeasurement instances loaded from file
+        measurements (FPPMeasurement): FPPMeasurement instances loaded from file
     '''
-
     with open(file, 'r') as fp:
         data = json.load(fp)
 
-    # for instance in data:
-    #     # Create new FPPMeasurement instance
     measurement = FPPMeasurement(
-        phase_shifting_type=PhaseShiftingAlgorithm(data.get('phase_shifting_type', 1)),
+        phase_shifting_type = PhaseShiftingAlgorithm(data.get('phase_shifting_type', 1)),
         shifts = data['shifts'],
         frequencies = data['frequencies'],
         camera_results= [
@@ -92,8 +89,34 @@ def load_fpp_measurements(file: str) -> FPPMeasurement:
 
     return measurement
 
-def get_images_from_config(store):
-    return [[cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2GRAY) for path in store[i]] for i in range(len(store))]
+
+def get_images_from_config(paths: list[list[str]]) -> list[np.ndarray]:
+    '''
+    Load images from files for CameraMeasurement instance.
+    
+    Args:
+        path (list[list[str]]): list of list of paths to images files
+
+    Returns:
+        images (list[list[np.ndarray]]): list of list of loaded images
+    '''
+    images = []
+
+    for one_frequency_path in paths:
+        images.append([])
+        for image_path in one_frequency_path:
+            image = cv2.imread(image_path)
+            # If image loaded
+            if image is not None:
+                # If image is 3D array
+                if len(image.shape) > 2:
+                    # Transform to grayscale
+                    images[-1].append(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
+                else:
+                    images[-1].append(image)
+
+    return images
+
 
 def get_quiverplot(coords: np.ndarray, maximums: np.ndarray, image: Optional[np.ndarray] = None, stretch_factor: float = 5.0):
     """Draw a vector field of displacements on input image (if defined)
