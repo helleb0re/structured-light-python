@@ -21,7 +21,7 @@ from min_max_projector_calibration import MinMaxProjectorCalibration
 from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm, CameraMeasurement
 from processing import process_fppmeasurement_with_phasogrammetry, calculate_phase_for_fppmeasurement, get_phase_field_ROI, get_phase_field_LUT, calculate_displacement_field
 
-from examples.test_plate_phasogrammetry import main_func
+from examples.test_plate_phasogrammetry import process_with_phasogrammetry
 
 def initialize_cameras(cam_type: str, cam_to_found_number: int=2) -> list[Camera]:
     '''
@@ -373,4 +373,4 @@ if __name__ == '__main__':
 
         elif (choice == 4):
             measurement = capture_measurement_images(cameras, projector, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)            
-            main_func(measurement)
+            process_with_phasogrammetry(measurement)

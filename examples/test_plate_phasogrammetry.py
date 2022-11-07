@@ -30,7 +30,7 @@ def fit_to_plane(x, y, z):
     return fit
 
 
-def main_func(measurement):
+def process_with_phasogrammetry(measurement):
     # Display FPPMeasurement parameters
     if measurement.phase_shifting_type == PhaseShiftingAlgorithm.n_step:
         algortihm_type = f'{len(measurement.shifts)}-step' 
@@ -50,10 +50,6 @@ def main_func(measurement):
     print('Calculate phase fields for first and second cameras...', end='', flush=True)
     calculate_phase_for_fppmeasurement(measurement)
     print('Done')
-    # print('Calcalute phase fields for second camera...', end='', flush=True)
-    # calculate_phase_for_fppmeasurement(measurements_v[0])
-    # calculate_phase_for_fppmeasurement(measurements_v[1])
-    # print('Done')
 
     # Plot unwrapped phases
     plt.subplot(221)
@@ -89,7 +85,7 @@ def main_func(measurement):
     plt.show()
 
     print('Calculate phase fields LUT...', end='', flush=True)
-    LUT = get_phase_field_LUT(measurement.camera_results[3], measurement.camera_results[1])
+    LUT = get_phase_field_LUT(measurement)
     print('Done')
 
     # Process FPPMeasurements with phasogrammetry approach
@@ -184,9 +180,7 @@ if __name__ == '__main__':
 
     # Load FPPMeasurements from files
     print('Load FPPMeasurements from files...', end='', flush=True)
-    # measurements_h = load_fpp_measurements(r'.\data\01-11-2022_17-55-30\fpp_measurement.json')
-    # measurements_v = load_fpp_measurements(r'.\data\01-11-2022_17-55-40\fpp_measurement.json')
     measurement = load_fpp_measurements(config.LAST_MEASUREMENT_PATH + r'\fpp_measurement.json')
     print('Done')
 
-    main_func(measurement)
+    process_with_phasogrammetry(measurement)

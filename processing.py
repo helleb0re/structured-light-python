@@ -126,25 +126,6 @@ def calculate_unwraped_phase(phase_l: np.ndarray, phase_h: np.ndarray, lamb_l:fl
     return unwrapped_phase
 
 
-def load_image(path: str) -> np.ndarray:
-    '''
-    Load image from file
-    
-    Args:
-        path (string): path to file for loading
-
-    Returns:
-        image (2D numpy array): loaded image
-    '''
-    image = cv2.imread(path)
-
-    # Tranform image to grayscale
-    if image is not None:
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-    return image
-
-
 def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
     '''
     Calculate unwrapped phase for FPP measurement instance with the help
@@ -152,32 +133,31 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
     Calculated phase fields will be stored in input measurement argument.
 
     Args:
-        measurement (FPPMeasurement): FPP measurement instance
+        measurement (FPPMeasurement): FPP measurement with images
     '''
     # Load measurement data
-    shifts_count = len(measurement.shifts)
     frequencies = measurement.frequencies
+    shifts = measurement.shifts
     frequency_counts = len(measurement.frequencies)
 
-    for res in measurement.camera_results:
+    for cam_result in measurement.camera_results:
+        # Empty lists for phase, unwrapped phase, average and modulated intensity
         phases = []
         unwrapped_phases = []
         avg_ints = []
         mod_ints = []
-        images = res.imgs_list
+        
+        # Get images for one camera
+        images = cam_result.imgs_list
 
+        # Calculate fields for each frequency 
         for i in range(frequency_counts):
-            images_for_one_frequency = []
 
-            # if images is None:
-            #     for j in range(shifts_count):
-            #         im = load_image(measurement.imgs_file_names[i][j])
-            #         images_for_one_frequency.append(im)
-            # else:
             images_for_one_frequency = images[i]
 
-            phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, measurement.shifts, measurement.frequencies[i], phase_shifting_type=measurement.phase_shifting_type)
+            phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, shifts, frequencies[i], phase_shifting_type=measurement.phase_shifting_type)
 
+            # Filter phase field with threshold
             mask = np.where(mod_int > 5, 1, 0) 
             phase = phase * mask
 
@@ -186,15 +166,18 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
             mod_ints.append(mod_int)
             
             if i == 0:
+                # First phase field should be unit-frequency without ambiguity
                 unwrapped_phases.append(phase)
             else:
+                # Next phase fields should be unwrapped
                 unwrapped_phase = calculate_unwraped_phase(unwrapped_phases[i-1], phases[i], 1 / frequencies[i-1], 1 / frequencies[i])
                 unwrapped_phases.append(unwrapped_phase)
 
-        res.phases = phases
-        res.unwrapped_phases = unwrapped_phases
-        res.average_intensities = avg_ints
-        res.modulated_intensities = mod_ints
+        # Set current camera results instance with calculated fields
+        cam_result.phases = phases
+        cam_result.unwrapped_phases = unwrapped_phases
+        cam_result.average_intensities = avg_ints
+        cam_result.modulated_intensities = mod_ints
     
 
 def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_edges: bool = True) -> bool:
@@ -558,15 +541,16 @@ def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshol
         fpp_measurement (FPPMeasurement): FPP measurment for calcaulating ROI
         signal_to_nose_threshold (float) = 0.25: threshold for signal to noise ratio to calcaulate ROI
     '''
-    for res in fpp_measurement.camera_results:
+    # For each camera result
+    for cam_result in fpp_measurement.camera_results:
         # Calculate signal to noise ratio
-        signal_to_nose = res.modulated_intensities[-1] / res.average_intensities[-1]
+        signal_to_nose = cam_result.modulated_intensities[-1] / cam_result.average_intensities[-1]
         # Threshold signal to noise with defined threshold level
         thresholded_coords = np.argwhere(signal_to_nose > signal_to_nose_threshold)
 
         # Store ROI mask
-        res.signal_to_noise_mask = np.zeros(signal_to_nose.shape, dtype=int)
-        res.signal_to_noise_mask[signal_to_nose > signal_to_nose_threshold] = 1
+        cam_result.signal_to_noise_mask = np.zeros(signal_to_nose.shape, dtype=int)
+        cam_result.signal_to_noise_mask[signal_to_nose > signal_to_nose_threshold] = 1
 
         # Determine four points around thresholded area
         x_min = np.min(thresholded_coords[:,1])
@@ -575,10 +559,10 @@ def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshol
         y_max = np.max(thresholded_coords[:,0])
 
         # Store determined ROI
-        res.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
+        cam_result.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
 
 
-def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FPPMeasurement) -> list[list[list]]:
+def get_phase_field_LUT(measurement: FPPMeasurement) -> list[list[list]]:
     '''
     Get LUT for horizontal and vertical phase field to increase phasogrammetry calculation speed.
     LUT is a two-dimensional array of coordinates whose indices correspond to the values of horizontal
@@ -587,13 +571,18 @@ def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FP
     The LUT is a list of lists of lists of two-dimensional coordinates.
 
     Args:
-        fpp_measurement_h (FPPMeasurement): FPP measurment for horizontal fringes
-        fpp_measurement_v (FPPMeasurement): FPP measurment for vertical fringes
+        measurement (FPPMeasurement): FPP measurment with horizontal and vertical fringes
     Returns:
         LUT (list[list[list]]): LUT structure containing the coordinates of points for the horizontal and vertical phase values
     '''
-    p_h = fpp_measurement_h.unwrapped_phases[-1]
-    p_v = fpp_measurement_v.unwrapped_phases[-1]
+    assert len(measurement.camera_results) == 4, 'It should be four (4) camera results in camera_results of fpp_measurement'
+    
+    # Get horizontal and vertical unwrapped phases for second camera
+    cam_meas_h = measurement.camera_results[3]
+    cam_meas_v = measurement.camera_results[1]
+
+    p_h = cam_meas_h.unwrapped_phases[-1]
+    p_v = cam_meas_v.unwrapped_phases[-1]
 
     # Find range for horizontal and vertical phase
     ph_max = np.max(p_h)
@@ -619,7 +608,7 @@ def get_phase_field_LUT(fpp_measurement_h: FPPMeasurement, fpp_measurement_v: FP
     # Fill LUT with coordinates of points with horizontal and vertical values as indicies
     for y in range(h):
         for x in range(w):
-            if fpp_measurement_h.signal_to_noise_mask[y, x] == 1:
+            if cam_meas_h.signal_to_noise_mask[y, x] == 1:# and cam_meas_v.signal_to_noise_mask[y, x] == 1:
                 LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
     
     # Add range of horizontal and vertical phases at the end of LUT
@@ -634,8 +623,7 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
     Find 2D corresponding points for two phase fields sets with phasogrammetry approach 
 
     Args:
-        fppmeasurements_h (list of FPPMeasurement): list of FPPMeasurements instances with horizontal fringes
-        fppmeasurements_v (list of FPPMeasurement): list of FPPMeasurements instances with vertical fringes
+        measurement (FPPMeasurement): FPPMeasurement instances with horizontal and vertical phase field for two cameras
         step_x, step_y (float): horizontal and vertical steps to calculate corresponding points
         LUT (list[list[list]]): LUT structure containing the coordinates of points for the horizontal and vertical phase values
     Returns:
