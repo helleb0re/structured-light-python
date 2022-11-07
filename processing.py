@@ -16,25 +16,22 @@ from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
 
 def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[list[float]]=None, frequency: Optional[float]=None, phase_shifting_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step, direct_formula: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray] :
     '''
-    Calculate wrapped phase from several PSP images by 
+    Calculate wrapped phase from several Phase Shifting Profilometry images by 
     generic formula (8) in https://doi.org/10.1016/j.optlaseng.2018.04.019
 
     Args:
-        images (list): the list of PSP images
-        phase_shifts=None (list): the list of phase shifts for each image from images,
+        images (list of numpy arrays): the list of Phase Shifting Profilometry images
+        phase_shifts = None (list): the list of phase shifts for each image from images,
         if phase_shifts is not defined, its calculated automatical for uniform step
-        frequency=None (float): the frequency of measurement to add PI for unity frequency images
-        direct_formula=False (bool): use direct formulas to calculate phases for 3 and 4 phase shifts
+        frequency = None (float): the frequency of measurement to add PI for unity frequency images
+        phase_shifting_type = n_step (enum(int)): type of phase shifting algorithm should be used for phase calculating
+        direct_formula = False (bool): use direct formulas to calculate phases for 3- and 4-step phase shifts
 
     Returns:
         result_phase (2D numpy array): wrapped phase from images
         average_intensity (2D numpy array): average intensity on images
         modulated_intensity (2D numpy array): modulated intensity on images
     '''
-
-    # assert phase_shifts is None or len(images) == len(phase_shifts), \
-    # 'Length of phase_shifts must be equal to images length'
-
     def calculate_n_step_phase(imgs: list[np.ndarray], phase_shifts: list[float]):
         # Use specific case for phase shifts length
         if direct_formula and len(phase_shifts) == 3:
@@ -78,15 +75,20 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
     if phase_shifts is None:
         phase_shifts = [2 * np.pi / len(images) * n for n in range(len(images))]
 
-    # Form arrays for broadcasting
+    # Form numpy array for broadcasting
     imgs = np.zeros((len(images), images[0].shape[0], images[0].shape[1]))
 
+    # Add images to formed numpy array
     for i in range(len(images)):
         imgs[i] = images[i]
     
+    # Depending on phase shift algorithm calculate wrapped phase field
     if phase_shifting_type == PhaseShiftingAlgorithm.n_step:
+        # Classic N-step approach
         result_phase, average_intensity, modulated_intensity = calculate_n_step_phase(images, phase_shifts)
     elif phase_shifting_type == PhaseShiftingAlgorithm.double_three_step:
+        # Double three-step approach - average of two 3-step phases (second shifted by PI/3) 
+        # Calculate formula (26-31) from section 3.2 in https://doi.org/10.1016/j.optlaseng.2018.04.019
         result_phase1, average_intensity1, modulated_intensity1 = calculate_n_step_phase(imgs[:3,:,:], phase_shifts[:3])
         result_phase2, average_intensity2, modulated_intensity2 = calculate_n_step_phase(imgs[3:,:,:], phase_shifts[3:])
         
@@ -99,7 +101,7 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
 
 def calculate_unwraped_phase(phase_l: np.ndarray, phase_h: np.ndarray, lamb_l:float , lamb_h: float) -> np.ndarray:
     '''
-    Calculate unwrapped phase from two sets of PSP images by 
+    Calculate unwrapped phase from two sets of Phase Shifting Profilometry images by 
     formula (94-95) in https://doi.org/10.1016/j.optlaseng.2018.04.019
     with standard temporal phase unwrapping (TPU) algorithm
 

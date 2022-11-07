@@ -9,7 +9,6 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
-from processing import calculate_phase_for_fppmeasurement
 
 
 def create_fpp_measurement_from_files(files_path : str, file_mask : str, shifts_count : int, frequencies : list[float]) -> FPPMeasurement:
@@ -27,7 +26,6 @@ def create_fpp_measurement_from_files(files_path : str, file_mask : str, shifts_
     Returns:
         measurement (FPPMeasurement): FPPMeasurement instance
     '''
-
     # Filenames for image files
     filenames = []
 
@@ -74,8 +72,9 @@ def load_fpp_measurements(file: str) -> list[FPPMeasurement]:
             fringe_orientation = instance['fringe_orientation'],
             imgs_file_names =   instance['imgs_file_names']
         )
-        measurement.phase_shifting_type = PhaseShiftingAlgorithm(instance['phase_shifting_type'])
-        # measurement.imgs_file_names = instance['imgs_file_names']
+        # Try get value of phase shifting algorithm enum, 1 is default 
+        ps_algorithm_value = instance.get('phase_shifting_type', 1)
+        measurement.phase_shifting_type = PhaseShiftingAlgorithm(ps_algorithm_value)
 
         measurements.append(measurement)
 

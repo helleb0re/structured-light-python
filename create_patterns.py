@@ -1,7 +1,6 @@
 '''Module for creating FPP patterns'''
 
 from __future__ import annotations
-from typing import Union
 
 import numpy as np
 
@@ -10,7 +9,7 @@ from fpp_structures import PhaseShiftingAlgorithm
 
 def create_psp_template(width: int, height: int, frequency: float, shifts_number: int = 4, vertical: bool = True, delta_fi: float = 0) -> tuple[list[np.ndarray], list[float]]:
     '''
-    Create set of patterns for phase shift profilometry for one frequencies.
+    Create set of patterns for phase shift profilometry for one frequency.
     Patterns returned as list of numpy arrays.
 
     Args:
@@ -19,7 +18,7 @@ def create_psp_template(width: int, height: int, frequency: float, shifts_number
         frequency (float): frequency of patterns to generate
         shifts_number (int): number of phase shifts for generated patterns
         vertical (bool): create vertical fringes, if False create horizontal
-
+        delta_fi (float): additional phase shift added to each point of pattern
     Returns:
         patterns (list[np.ndarray]): list of generated patterns
         phase_shifts (list[float]): list of phase shifts for generated patterns
@@ -52,10 +51,11 @@ def create_psp_template(width: int, height: int, frequency: float, shifts_number
 
     return patterns, phase_shifts
 
-def create_psp_templates(width: int, height: int, frequencies: Union[int, list[float]], phase_shift_type: PhaseShiftingAlgorithm, shifts_number: int = 4, vertical: bool = True) -> tuple[list[list[np.ndarray]], list[float], list[float]]:
+
+def create_psp_templates(width: int, height: int, frequencies: list[float], phase_shift_type: PhaseShiftingAlgorithm, shifts_number: int = 4, vertical: bool = True) -> tuple[list[list[np.ndarray]], list[float], list[float]]:
     '''
-    Create set of patterns for phase shift profilometry for several frequencies.
-    Patterns returned as list of list of numpy arrays.
+    Create set of patterns for phase shift profilometry for defined frequencies and
+    defined phase shift algorithm. Patterns returned as list of list of numpy arrays.
     Outer list contains list with shifts_numbers patterns for each frequency.
     Patterns for one frequency generated via create_psp_template().
 
@@ -63,6 +63,7 @@ def create_psp_templates(width: int, height: int, frequencies: Union[int, list[f
         width (int): width of patterns to generate
         height (int): height of patterns to generate
         frequencies (int or list[float]): frequencies (number or list) of patterns to generate
+        phase_shift_type (PhaseShiftingAlgorithm): type of phase shift algorithm
         shifts_number (int): number of phase shifts for one frequency
         vertical (bool): create vertical patterns, if False create horizontal
 
@@ -73,6 +74,7 @@ def create_psp_templates(width: int, height: int, frequencies: Union[int, list[f
     '''
     patterns = []
 
+    # Generate patterns depending on phase_shift_type
     if phase_shift_type == PhaseShiftingAlgorithm.n_step:
         for frequency in frequencies:
             template, phase_shifts = create_psp_template(width, height, frequency, shifts_number, vertical)
@@ -81,11 +83,14 @@ def create_psp_templates(width: int, height: int, frequencies: Union[int, list[f
         for frequency in frequencies:
             template, phase_shifts = create_psp_template(width, height, frequency, 3, vertical)
             patterns.append(template)
+            # Add a set of 3-step shifted patterns with PI/3 offset
             template, phase_shifts2 = create_psp_template(width, height, frequency, 3, vertical, -np.pi / 3)
+            # Overall 6 patterns with 6 phase shifts generated
             patterns[-1].extend(template)
             phase_shifts.extend(phase_shifts2)
 
     return patterns, phase_shifts, frequencies 
+
 
 def linear_gradient(width: int, height: int, vertical: bool = True) -> np.ndarray:
     '''

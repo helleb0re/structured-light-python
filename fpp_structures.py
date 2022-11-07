@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 from typing import Optional
-from dataclasses import dataclass, field
+
 import enum
+from dataclasses import dataclass, field
+
 import numpy as np
 
+
 class PhaseShiftingAlgorithm(enum.IntEnum):
+    '''Enum for phase shift algorithm type'''
     n_step = 1
     double_three_step = 2
 
