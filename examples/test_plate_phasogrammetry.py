@@ -10,9 +10,9 @@ from matplotlib import pyplot as plt
 sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import config
-from fpp_structures import PhaseShiftingAlgorithm
+from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
 from processing import calculate_phase_for_fppmeasurement, process_fppmeasurement_with_phasogrammetry, get_phase_field_ROI, get_phase_field_LUT, triangulate_points
-from utils import load_fpp_measurements
+from utils import get_images_from_config, load_fpp_measurements
 
 
 def fit_to_plane(x, y, z):
@@ -30,7 +30,14 @@ def fit_to_plane(x, y, z):
     return fit
 
 
-def process_with_phasogrammetry(measurement):
+def process_with_phasogrammetry(measurement: FPPMeasurement):
+    # If there are no images in measurement - load them
+    if len(measurement.camera_results[0].imgs_list) == 0:
+        print('Load images from files...', end='', flush=True)
+        for cam_result in measurement.camera_results:
+            cam_result.imgs_list = get_images_from_config(cam_result.imgs_file_names)
+        print('Done')
+    
     # Display FPPMeasurement parameters
     if measurement.phase_shifting_type == PhaseShiftingAlgorithm.n_step:
         algortihm_type = f'{len(measurement.shifts)}-step' 
@@ -94,7 +101,7 @@ def process_with_phasogrammetry(measurement):
     print(f'Found {points_2d_1.shape[0]} corresponding points')
     print('Done')
 
-    print('Calculate 3D points with triangulation...')
+    print('\nCalculate 3D points with triangulation...')
     points_3d, rms1, rms2, reproj_err1, reproj_err2 = triangulate_points(calibration_data, points_2d_1, points_2d_2)
     print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
     print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
@@ -123,7 +130,7 @@ def process_with_phasogrammetry(measurement):
     points_2d_2 = points_2d_2[filter_condition,:]
     print(f'Found {points_3d.shape[0] - x.shape[0]} outliers')
 
-    print('Calculate 3D points with triangulation without outliers...')
+    print('\nCalculate 3D points with triangulation without outliers...')
     points_3d, rms1, rms2, reproj_err1, reproj_err2 = triangulate_points(calibration_data, points_2d_1, points_2d_2)
     print(f'Reprojected RMS for camera 1 = {rms1:.3f}')
     print(f'Reprojected RMS for camera 2 = {rms2:.3f}')
