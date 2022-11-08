@@ -218,11 +218,11 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
     cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam2', 600, 400)
 
-    frequencies = [1, 12, 48, 138]
+    frequencies = [1, 4, 12, 48, 90]
 
     # Create phase shift profilometry patterns
-    patterns_v, _ = create_psp_templates(1280, 720, frequencies, phase_shift_type, vertical=True)
-    patterns_h, phase_shifts = create_psp_templates(1280, 720, frequencies, phase_shift_type, vertical=False)
+    patterns_v, _ = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, vertical=True)
+    patterns_h, phase_shifts = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, vertical=False)
 
     patterns_vh = {'vertical': patterns_v, 'horizontal': patterns_h}
 
@@ -309,7 +309,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
                         raise Exception('Error during image saving!')
                 else:
                     res1.imgs_list[-1].append(frame_1)
-                    res2.imgs_list[-1].append(frame_1)
+                    res2.imgs_list[-1].append(frame_2)
     
     # Stop projector
     projector.close_window()
@@ -368,9 +368,10 @@ if __name__ == '__main__':
             calibrate_projector(cameras, projector)
 
         elif (choice == 3):
-            test_pattern, _, _ = create_psp_templates(1920, 1080, 7, 1, vertical=False)
+            frequencies = [1, 4, 16, 64, 100, 120]
+            test_pattern, _ = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, PhaseShiftingAlgorithm.n_step, 1, vertical=False)
             MinMaxProjectorCalibration(test_pattern, cameras, projector)
 
         elif (choice == 4):
-            measurement = capture_measurement_images(cameras, projector, phase_shift_type=PhaseShiftingAlgorithm.double_three_step)            
+            measurement = capture_measurement_images(cameras, projector, phase_shift_type=PhaseShiftingAlgorithm.n_step)            
             process_with_phasogrammetry(measurement)
