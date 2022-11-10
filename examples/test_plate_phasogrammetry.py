@@ -11,7 +11,7 @@ sys.path.insert(1, os.path.join(sys.path[0], '..'))
 
 import config
 from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
-from processing import calculate_phase_for_fppmeasurement, process_fppmeasurement_with_phasogrammetry, get_phase_field_ROI, get_phase_field_LUT, triangulate_points
+from processing import calculate_phase_for_fppmeasurement, create_polygon, process_fppmeasurement_with_phasogrammetry, get_phase_field_ROI, get_phase_field_LUT, triangulate_points
 from utils import get_images_from_config, load_fpp_measurements
 
 
@@ -68,13 +68,17 @@ def process_with_phasogrammetry(measurement: FPPMeasurement):
     plt.subplot(224)
     plt.imshow(measurement.camera_results[3].unwrapped_phases[-1], cmap='gray')
     plt.show()
+    ms = measurement.camera_results[0].unwrapped_phases[-1]
+    plt.plot(ms[ms.shape[0]//2,:], 'b-o')
+    plt.show()
 
-    print('Determine phase fields ROI...', end='', flush=True)
-    get_phase_field_ROI(measurement)
-    print('Done')
+    # print('Determine phase fields ROI...', end='', flush=True)
+    # get_phase_field_ROI(measurement)
+    # print('Done')
 
     # Set ROI manually for test plate
-    measurement.camera_results[0].ROI = np.array([[470, 230], [1420, 170], [1350, 1150], [520, 1350]], dtype = "float32")
+    measurement.camera_results[0].ROI = np.array([[470, 230], [1420, 170], [1350, 1150], [520, 1350]])
+    measurement.camera_results[0].ROI_mask = create_polygon(measurement.camera_results[0].imgs_list[0][0].shape, measurement.camera_results[0].ROI)
 
     # Plot signal to noise ration
     plt.subplot(221)

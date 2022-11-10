@@ -180,6 +180,42 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
         cam_result.modulated_intensities = mod_ints
     
 
+def create_polygon(shape, vertices):
+    """
+    Creates np.array with dimensions defined by shape
+    Fills polygon defined by vertices with ones, all other values zero
+    """
+    def check(p1, p2, arr):
+        """
+        Uses the line defined by p1 and p2 to check array of 
+        input indices against interpolated value
+
+        Returns boolean array, with True inside and False outside of shape
+        """
+        idxs = np.indices(arr.shape) # Create 3D array of indices
+
+        p1 = p1.astype(float)
+        p2 = p2.astype(float)
+
+        # Calculate max column idx for each row idx based on interpolated line between two points
+        max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) +  p1[1]    
+        sign = np.sign(p2[0] - p1[0])
+        return idxs[1] * sign <= max_col_idx * sign
+
+    base_array = np.zeros(shape, dtype=float)  # Initialize your array of zeros
+
+    fill = np.ones(base_array.shape) * True  # Initialize boolean array defining shape fill
+
+    # Create check array for each edge segment, combine into fill array
+    for k in range(vertices.shape[0]):
+        fill = np.all([fill, check(vertices[k], vertices[k-1], base_array)], axis=0)
+
+    # Set all values inside polygon to one
+    base_array[fill] = 1
+
+    return base_array
+
+
 def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_edges: bool = True) -> bool:
     '''
     Test if point (x,y) is inside polygon poly
@@ -380,7 +416,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
             iter_num = 0
 
             # Iterate thru variants of x and y where fields are near to phase_v and phase_h
-            while iter_num < 5: 
+            while iter_num < 1: 
                 # Get neareast coords to current values of x and y
                 if int(np.round(x)) - x == 0:
                     x1 = int(x - 1)
@@ -655,10 +691,7 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
 
     for y in yy:
         for x in xx:
-            # Check if coordinate in ROI rectangle
-            # if measurements_h[0].signal_to_noise_mask[y, x] == 1:
-            #   coords1.append((x, y))
-            if point_inside_polygon(x, y, ROI1):
+            if measurement.camera_results[0].ROI_mask[y, x] == 1:
                 coords1.append((x, y))
 
     coords2 = []
