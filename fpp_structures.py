@@ -21,8 +21,8 @@ class CameraMeasurement:
     Class to store result of measurement for one camera
     '''
     fringe_orientation: Optional[str] = 'vertical'    
-    imgs_list: Optional[list[np.ndarray]] = field(default_factory=lambda:list())
-    imgs_file_names: Optional[list[str]] = field(default_factory=lambda:list())
+    imgs_list: Optional[list[list[np.ndarray]]] = field(default_factory=lambda:list())
+    imgs_file_names: Optional[list[list[str]]] = field(default_factory=lambda:list())
 
     # Calculated attributes
     phases: Optional[list[np.ndarray]] = field(init=False)
@@ -30,7 +30,9 @@ class CameraMeasurement:
     average_intensities: Optional[list[np.ndarray]] = field(init=False)
     modulated_intensities: Optional[list[np.ndarray]] = field(init=False)
     signal_to_noise_mask: Optional[np.ndarray] = field(init=False)
-    ROI: Optional[np.array] = field(init=False)
+    ROI: Optional[np.array[list]] = field(init=False)
+    ROI_mask: Optional[np.ndarray] = field(init=False)
+    use_ROI_mask: bool = field(init=False, default=True)
 
 
 @dataclass

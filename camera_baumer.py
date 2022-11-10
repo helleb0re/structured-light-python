@@ -28,10 +28,11 @@ class CameraBaumer(Camera):
                 camera = CameraBaumer(neoapi.Cam())
 
                 # Set default cameras parameters
-                camera.exposure = 80000
-                camera.gain = 4
+                camera.exposure = 100_000
+                camera.gain = 2.0
                 camera.frame_rate_enable = True
                 camera.frame_rate = 25.0
+                camera.camera.f.PixelFormat = neoapi.PixelFormat_Mono12
 
                 # Set first camera as master for triggering
                 if i == 0:

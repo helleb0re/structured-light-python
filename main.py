@@ -141,7 +141,7 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
     # TODO: Add parameters to config
     win_size_x = 50
     win_size_y = 50
-    max_intensity = 256
+    max_intensity = 1024
     average_num = 5
     border_width = 20
     
@@ -180,13 +180,13 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
         brightness1.append(brt1)
         brightness2.append(brt2)
 
-        img_to_display1 = img1.astype(np.uint8)
+        img_to_display1 = img1.astype(np.uint16)
         cv2.rectangle(img_to_display1, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
         cv2.putText(img_to_display1, f'{intensity = }', (50,50), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
         cv2.putText(img_to_display1, f'Brightness = {brt1:.3f}', (50,100), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
         cv2.imshow('cam1', img_to_display1)
 
-        img_to_display2 = img2.astype(np.uint8)
+        img_to_display2 = img2.astype(np.uint16)
         cv2.rectangle(img_to_display2, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
         cv2.putText(img_to_display2, f'{intensity = }', (50,50), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
         cv2.putText(img_to_display2, f'Brightness = {brt2:.3f}', (50,100), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
@@ -218,11 +218,12 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
     cv2.namedWindow('cam2', cv2.WINDOW_NORMAL)
     cv2.resizeWindow('cam2', 600, 400)
 
+    shift_num = 4
     frequencies = [1, 4, 12, 48, 90]
 
     # Create phase shift profilometry patterns
-    patterns_v, _ = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, vertical=True)
-    patterns_h, phase_shifts = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, vertical=False)
+    patterns_v, _ = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, shifts_number=shift_num, vertical=True)
+    patterns_h, phase_shifts = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, shifts_number=shift_num, vertical=False)
 
     patterns_vh = {'vertical': patterns_v, 'horizontal': patterns_h}
 
@@ -288,8 +289,14 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
                 cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
 
                 # Capture images
-                frame_1 = cameras[0].get_image()
-                frame_2 = cameras[1].get_image()
+                frames_1 = []
+                frames_2 = []
+                for _ in range(1):
+                    frames_1.append(cameras[0].get_image())
+                    frames_2.append(cameras[1].get_image())
+
+                frame_1 = np.mean(frames_1, axis=0).astype(np.uint16)
+                frame_2 = np.mean(frames_2, axis=0).astype(np.uint16)
 
                 cv2.imshow('cam1', frame_1)
                 cv2.imshow('cam2', frame_2)

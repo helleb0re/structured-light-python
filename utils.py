@@ -90,7 +90,7 @@ def load_fpp_measurements(file: str) -> FPPMeasurement:
     return measurement
 
 
-def get_images_from_config(paths: list[list[str]]) -> list[np.ndarray]:
+def get_images_from_config(paths: list[list[str]]) -> list[list[np.ndarray]]:
     '''
     Load images from files for CameraMeasurement instance.
     
