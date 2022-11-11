@@ -415,26 +415,26 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
 
         if len(cor_points) > 0 and len(cor_points) < 20:
             # Get mean value for x, y coordinate for points from LUT as second approximation
-            x, y = np.mean(cor_points, axis=0)
+            x0, y0 = np.mean(cor_points, axis=0)
 
             iter_num = 0
 
             # Iterate thru variants of x and y where fields are near to phase_v and phase_h
             while iter_num < 5: 
                 # Get neareast coords to current values of x and y
-                if int(np.round(x)) - x == 0:
-                    x1 = int(x - 1)
-                    x2 = int(x + 1)
+                if int(np.round(x0)) - x0 == 0:
+                    x1 = int(x0 - 1)
+                    x2 = int(x0 + 1)
                 else:
-                    x1 = int(np.floor(x))
-                    x2 = int(np.ceil(x))
+                    x1 = int(np.floor(x0))
+                    x2 = int(np.ceil(x0))
 
-                if int(np.round(y)) - y == 0:
-                    y1 = int(y - 1)
-                    y2 = int(y + 1)
+                if int(np.round(y0)) - y0 == 0:
+                    y1 = int(y0 - 1)
+                    y2 = int(y0 + 1)
                 else:
-                    y1 = int(np.floor(y))
-                    y2 = int(np.ceil(y))
+                    y1 = int(np.floor(y0))
+                    y2 = int(np.ceil(y0))
   
                 # Check if coords are on field (are positive and less than field shape)
                 if x1 > 0 and x2 > 0 and y1 > 0 and y2 > 0 and x1 < p1_h.shape[1] and x2 < p1_h.shape[1] and y1 < p1_h.shape[0] and y2 < p1_h.shape[0]:
@@ -447,15 +447,15 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
                                                                     (x2, y2, p2_v[y2, x2]), (x2, y1, p2_v[y2, x1])))
 
                     # Find there bilinear interploation is equal to phase_h and phase_v
-                    x, y =  fsolve(bilinear_phase_fields_approximation, (x1, y1), args=(aa, bb, phase_h, phase_v))
+                    x0, y0 =  fsolve(bilinear_phase_fields_approximation, (x1, y1), args=(aa, bb, phase_h, phase_v))
 
                     # TODO: Return residiuals from function
                     # Calculate residiuals
-                    h_res, v_res = bilinear_phase_fields_approximation((x, y), aa, bb, phase_h, phase_v) 
+                    h_res, v_res = bilinear_phase_fields_approximation((x0, y0), aa, bb, phase_h, phase_v) 
 
                     # Check if x and y are between x1, x2, y1 and y2
-                    if x2 > x > x1 and y2 > y > y1:
-                        return x, y
+                    if x2 > x0 > x1 and y2 > y0 > y1:
+                        return x0, y0
                     else:
                         iter_num = iter_num + 1
                 else:
@@ -521,7 +521,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     return x2, y2
 
 
-def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int, window_size: int) -> np.ndarray:
+def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x1: int, y1: int, x2: int, y2: int, window_size: int) -> np.ndarray:
     '''
     Calculate correlation function for horizontal and vertical phase fields
 
@@ -537,15 +537,17 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
     Returns:
         corelation_field (numpy array): calculated correlation field
     '''
-    p1_h_ij = p1_h[int(y - window_size//2):int(y + window_size//2), int(x - window_size//2):int(x + window_size//2)]
-    p1_v_ij = p1_v[int(y - window_size//2):int(y + window_size//2), int(x - window_size//2):int(x + window_size//2)]
+    p1_h_ij = p1_h[int(y1 - window_size//2):int(y1 + window_size//2), int(x1 - window_size//2):int(x1 + window_size//2)]
+    p1_v_ij = p1_v[int(y1 - window_size//2):int(y1 + window_size//2), int(x1 - window_size//2):int(x1 + window_size//2)]
     p1_h_m = np.mean(p1_h_ij)
     p1_v_m = np.mean(p1_v_ij)
+    t1_h = (p1_h_ij - p1_h_m) ** 2
+    t1_v = (p1_v_ij - p1_v_m) ** 2
 
     corelation_field = np.zeros((window_size, window_size))
 
-    xx = np.linspace(x - window_size // 2, x + window_size // 2, window_size)
-    yy = np.linspace(y - window_size // 2, y + window_size // 2, window_size)
+    xx = np.linspace(x2 - window_size // 2, x2 + window_size // 2, window_size)
+    yy = np.linspace(y2 - window_size // 2, y2 + window_size // 2, window_size)
 
     for j in range(yy.shape[0]):
         for i in range(xx.shape[0]):
@@ -555,8 +557,6 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
             p2_v_ij = p2_v[int(y0 - window_size //2):int(y0 + window_size //2), int(x0 - window_size//2):int(x0 + window_size//2)]
             p2_h_m = np.mean(p2_h_ij)
             p2_v_m = np.mean(p2_v_ij)
-            t1_h = (p1_h_ij - p1_h_m) ** 2
-            t1_v = (p1_v_ij - p1_v_m) ** 2
             t2_h = (p2_h_ij - p2_h_m) ** 2
             t2_v = (p2_v_ij - p2_v_m) ** 2
 
@@ -565,7 +565,53 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
                 # if t < 1:
                 corelation_field[j, i] = t
 
-    return corelation_field
+                # Find maximum indexes for x and y
+    maximum = np.unravel_index(corelation_field.argmax(), corelation_field.shape)                        
+
+    # Get neighborhood pixels of maximum at X axis 
+    cx0 = np.fabs(corelation_field[maximum[0], maximum[1] - 1])
+    cx1 = np.fabs(corelation_field[maximum[0], maximum[1]    ])
+
+    if (maximum[1] == corelation_field.shape[1]):
+        cx2 = np.fabs(corelation_field[maximum[0], maximum[1] + 1])
+    else:
+        cx2 = np.fabs(corelation_field[maximum[0], 0])
+
+    # Get neighborhood pixels of maximum at Y axis 
+    cy0 = np.fabs(corelation_field[maximum[0] - 1, maximum[1]])
+    cy1 = np.fabs(corelation_field[maximum[0]    , maximum[1]])
+
+    if (maximum[0] == corelation_field.shape[0]):
+        cy2 = np.fabs(corelation_field[maximum[0] + 1, maximum[1]])
+    else:
+        cy2 = np.fabs(corelation_field[0, maximum[1]])
+
+    # 3-point gauss fit
+    try:
+        x_max = maximum[1] + (np.log(np.abs(cx0))  - np.log(np.abs(cx2)))/(2 * np.log(np.abs(cx0)) - 4 * np.log(np.abs(cx1)) + 2 * np.log(np.abs(cx2)))
+    except (ZeroDivisionError, ValueError):
+        x_max = 0
+    try:
+        y_max = maximum[0] + (np.log(np.abs(cy0))  - np.log(np.abs(cy2)))/(2 * np.log(np.abs(cy0)) - 4 * np.log(np.abs(cy1)) + 2 * np.log(np.abs(cy2)))
+    except (ZeroDivisionError, ValueError):
+        y_max = 0
+
+    # Shift maximum due to pereodic of correlation function
+    if x_max > corelation_field.shape[0] / 2:
+        x_max = x_max - corelation_field.shape[0]
+    elif np.fabs(x_max) < 0.01:
+        x_max = 0
+
+    # Shift maximum due to pereodic of correlation function
+    if y_max > corelation_field.shape[1] / 2:
+        y_max = y_max - corelation_field.shape[1]
+    elif np.fabs(y_max) < 0.01:
+        y_max = 0
+
+    if not np.isnan(x_max) and not np.isnan(y_max):
+        return x2 + x_max, y2 + y_max
+    else:
+        return -1, -1
 
 
 def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshold: float = 0.25):
