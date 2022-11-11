@@ -403,9 +403,13 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
 
     # If LUT available calculate corresponding points with it
     if LUT is not None:
-        # Get value for x, y coordinate from LUT as first approximation 
-        phase_h_index = LUT[-2].index(int(np.round(phase_h)))
-        phase_v_index = LUT[-1].index(int(np.round(phase_v)))
+        # Get value for x, y coordinate from LUT as first approximation
+        try: 
+            phase_h_index = LUT[-2].index(int(np.round(phase_h)))
+            phase_v_index = LUT[-1].index(int(np.round(phase_v)))
+        except:
+            # phases values not found in LUT
+            return -1, -1
         
         cor_points = LUT[phase_v_index][phase_h_index]
 
@@ -416,7 +420,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
             iter_num = 0
 
             # Iterate thru variants of x and y where fields are near to phase_v and phase_h
-            while iter_num < 1: 
+            while iter_num < 5: 
                 # Get neareast coords to current values of x and y
                 if int(np.round(x)) - x == 0:
                     x1 = int(x - 1)
@@ -614,17 +618,29 @@ def get_phase_field_LUT(measurement: FPPMeasurement) -> list[list[list]]:
     assert len(measurement.camera_results) == 4, 'It should be four (4) camera results in camera_results of fpp_measurement'
     
     # Get horizontal and vertical unwrapped phases for second camera
-    cam_meas_h = measurement.camera_results[3]
-    cam_meas_v = measurement.camera_results[1]
+    cam1_meas_h = measurement.camera_results[2]
+    cam1_meas_v = measurement.camera_results[0]
+    cam2_meas_h = measurement.camera_results[3]
+    cam2_meas_v = measurement.camera_results[1]
 
-    p_h = cam_meas_h.unwrapped_phases[-1]
-    p_v = cam_meas_v.unwrapped_phases[-1]
+    p_h = cam2_meas_h.unwrapped_phases[-1]
+    p_v = cam2_meas_v.unwrapped_phases[-1]
 
     # Find range for horizontal and vertical phase
-    ph_max = np.max(p_h)
-    ph_min = np.min(p_h)
-    pv_max = np.max(p_v)
-    pv_min = np.min(p_v)
+    if cam1_meas_h.ROI_mask is not None:
+        # If ROI mask defined - get min max phases from ROI area for first camera
+        p_h1 = cam1_meas_h.unwrapped_phases[-1][cam1_meas_h.ROI_mask == 1]
+        p_v1 = cam1_meas_v.unwrapped_phases[-1][cam1_meas_v.ROI_mask == 1]
+        ph_max = np.max(p_h1)
+        ph_min = np.min(p_h1)
+        pv_max = np.max(p_v1)
+        pv_min = np.min(p_v1)
+    else:
+        ph_max = np.max(p_h)
+        ph_min = np.min(p_h)
+        pv_max = np.max(p_v)
+        pv_min = np.min(p_v)
+
     h_range = np.arange(ph_min, ph_max)
     v_range = np.arange(pv_min, pv_max)
 
@@ -644,8 +660,9 @@ def get_phase_field_LUT(measurement: FPPMeasurement) -> list[list[list]]:
     # Fill LUT with coordinates of points with horizontal and vertical values as indicies
     for y in range(h):
         for x in range(w):
-            if cam_meas_h.signal_to_noise_mask[y, x] == 1:# and cam_meas_v.signal_to_noise_mask[y, x] == 1:
-                LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
+            if cam2_meas_h.signal_to_noise_mask[y, x] == 1 and cam2_meas_v.signal_to_noise_mask[y, x] == 1:
+                if pv_max - pv_min >= p_v_r[y][x] >= 0 and ph_max - ph_min >= p_h_r[y][x] >= 0:
+                    LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
     
     # Add range of horizontal and vertical phases at the end of LUT
     LUT.append(np.round(h_range).astype(int).tolist())

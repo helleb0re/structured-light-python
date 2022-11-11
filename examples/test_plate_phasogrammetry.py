@@ -68,17 +68,18 @@ def process_with_phasogrammetry(measurement: FPPMeasurement):
     plt.subplot(224)
     plt.imshow(measurement.camera_results[3].unwrapped_phases[-1], cmap='gray')
     plt.show()
-    ms = measurement.camera_results[0].unwrapped_phases[-1]
-    plt.plot(ms[ms.shape[0]//2,:], 'b-o')
-    plt.show()
 
-    # print('Determine phase fields ROI...', end='', flush=True)
-    # get_phase_field_ROI(measurement)
-    # print('Done')
+    print('Determine phase fields ROI...', end='', flush=True)
+    get_phase_field_ROI(measurement)
+    print('Done')
 
     # Set ROI manually for test plate
+    # measurement.camera_results[0].ROI = np.array([[285, 103], [1513, 90], [1441, 1210], [411, 1471]])
     measurement.camera_results[0].ROI = np.array([[470, 230], [1420, 170], [1350, 1150], [520, 1350]])
-    measurement.camera_results[0].ROI_mask = create_polygon(measurement.camera_results[0].imgs_list[0][0].shape, measurement.camera_results[0].ROI)
+    # measurement.camera_results[0].ROI = np.array([[810, 580], [1085, 530], [1075, 780], [830, 840]])
+    ROI_mask = create_polygon(measurement.camera_results[0].imgs_list[0][0].shape, measurement.camera_results[0].ROI)
+    measurement.camera_results[0].ROI_mask = ROI_mask
+    measurement.camera_results[2].ROI_mask = ROI_mask
 
     # Plot signal to noise ration
     plt.subplot(221)
@@ -145,7 +146,7 @@ def process_with_phasogrammetry(measurement: FPPMeasurement):
     distance_to_plane = np.abs(z - (fit2[0] * x + fit2[1] * y + fit2[2]))
     print(f'Fitting deviation mean = {np.mean(distance_to_plane):.4f} mm')
     print(f'Fitting deviation max = {np.max(distance_to_plane):.4f} mm')
-    print(f'Fitting deviation std = {np.std(distance_to_plane):.4f} mm\n')
+    print(f'Fitting deviation std = {np.std(distance_to_plane):.4f} mm')
 
     print('\nTry to filter outliers with distance to fitted surface...')
     filter_condition = distance_to_plane < 3*np.std(distance_to_plane)
@@ -175,8 +176,6 @@ def process_with_phasogrammetry(measurement: FPPMeasurement):
     ax.set_xlabel('X, mm')
     ax.set_ylabel('Y, mm')
     ax.set_zlabel('Z, mm')
-
-    ax.set_ylim(ax.get_xlim())
 
     ax.view_init(elev=-75, azim=-89)
 
