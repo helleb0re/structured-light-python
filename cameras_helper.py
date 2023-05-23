@@ -21,7 +21,6 @@ import numpy as np
 import cv2
 
 import neoapi
-#import PYbgapi2
 
 from camera_web import CameraWeb
 from camera_baumer import CameraBaumer
@@ -94,8 +93,8 @@ def calibrate_cameras(markers_x, markers_y, images_count=15, use_stream=True,
     cameras = CameraBaumer.get_available_cameras(cameras_num_to_find=2)
 
     for cam_num, camera in enumerate(cameras):
-        cv2.namedWindow(f"camera_{cam_num}", cv2.WINDOW_NORMAL) 
-        cv2.resizeWindow(f"camera_{cam_num}", 800, 600)
+        cv2.namedWindow(f'camera_{cam_num}', cv2.WINDOW_NORMAL) 
+        cv2.resizeWindow(f'camera_{cam_num}', 800, 600)
 
     images = [[] for _ in cameras]
 
@@ -115,13 +114,13 @@ def calibrate_cameras(markers_x, markers_y, images_count=15, use_stream=True,
         for cam_num, camera in enumerate(cameras):
             images[cam_num] = camera.get_image()
 
-        end_time = time.time() - start_time                                    
-        
+        end_time = time.time() - start_time
+
         if images[0] is not None and images[1] is not None:          
             # Bool to store if corners is found on images or not
             # cornes_founded = True
             cornes_founded = [False, False]
-            # Variables to store corners for area 
+            # Variables to store corners for area
             lu_corner = [None, None]
             rb_corner = [None, None]
 
@@ -130,7 +129,7 @@ def calibrate_cameras(markers_x, markers_y, images_count=15, use_stream=True,
 
             for k, img in enumerate(images):
                 gray = img.copy()
-                if cameras[k].type == "web":
+                if cameras[k].type == 'web':
                     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
                 img_to_draw = gray.copy()
@@ -138,14 +137,14 @@ def calibrate_cameras(markers_x, markers_y, images_count=15, use_stream=True,
 
                 blur_index = cv2.Laplacian(gray, cv2.CV_64F).var()
 
-                # Try to find chessboard on images       
+                # Try to find chessboard on images
                 if do_calibrate and blur_index > blur_threshold:
                     # termination criteria
                     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
 
                     # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
-                    objp = np.zeros((markers_y*markers_x,3), np.float32)
-                    objp[:,:2] = np.mgrid[0:markers_x,0:markers_y].T.reshape(-1,2)
+                    objp = np.zeros((markers_y * markers_x, 3), np.float32)
+                    objp[:, :2] = np.mgrid[0:markers_x, 0:markers_y].T.reshape(-1, 2)
 
                     # Find the chess board corners
                     ret, corners = cv2.findChessboardCorners(gray, (markers_x, markers_y), flags=cv2.CALIB_CB_FAST_CHECK)
@@ -169,9 +168,9 @@ def calibrate_cameras(markers_x, markers_y, images_count=15, use_stream=True,
                 if left_upper_corners[0] and left_upper_corners[1]:
                     for j, _ in enumerate(left_upper_corners[k]):
                         fill_area = cv2.rectangle(fill_area,
-                                                    (int(left_upper_corners[k][j][0][0]), int(left_upper_corners[k][j][0][1])),
-                                                    (int(right_bottom_corners[k][j][0][0]), int(right_bottom_corners[k][j][0][1])),
-                                                    (255, 0, 0), -1)
+                                                  (int(left_upper_corners[k][j][0][0]), int(left_upper_corners[k][j][0][1])),
+                                                  (int(right_bottom_corners[k][j][0][0]), int(right_bottom_corners[k][j][0][1])),
+                                                  (255, 0, 0), -1)
                     img_to_draw = cv2.addWeighted(img_to_draw, 0.7, fill_area, 0.3, 0)
 
                 
@@ -179,11 +178,11 @@ def calibrate_cameras(markers_x, markers_y, images_count=15, use_stream=True,
                 cv2.putText(img_to_draw, f'Blur index {blur_index:.2f}', (50, 100), cv2.FONT_HERSHEY_TRIPLEX, 1.5, (255, 0, 0), 2)
                 cv2.imshow(f"camera_{k}", img_to_draw)
                 k = cv2.waitKey(10)
-                if k == 27: # Escape
+                if k == 27:  # Escape
                     return
                 elif k != -1:
                     print(k)
-            
+
             if all(cornes_founded) and main_cornes_founded:
                 for k, _ in enumerate(images):
                     left_upper_corners[k].append(lu_corner[k])
@@ -210,17 +209,17 @@ def calculate_calibration(force_recalculate=False, file_mask1='camera_2_image*.p
     markers_x = 25 #37
     markers_y = 17 #23
 
-    square_size_x = 15 # mm
-    square_size_y = 15 # mm
+    square_size_x = 5  # mm
+    square_size_y = 5  # mm
 
     # VCXG-32M
-    sensor_x_size = 6.9632 # mm
-    sensor_y_size = 5.2224 # mm
+    sensor_x_size = 6.9632  # mm
+    sensor_y_size = 5.2224  # mm
 
     # VLG-24M
     # sensor_x_size = 7.06 # mm
     # sensor_y_size = 5.29 # mm
- 
+
     data_loaded = False
 
     if not force_recalculate:
@@ -237,16 +236,16 @@ def calculate_calibration(force_recalculate=False, file_mask1='camera_2_image*.p
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6)
 
         # prepare object points, like (0,0,0), (1,0,0), (2,0,0) ....,(6,5,0)
-        objp = np.zeros((markers_x*markers_y, 3), np.float32)
-        objp[:,:2] = np.mgrid[0:markers_y, 0:markers_x].T.reshape(-1,2)
+        objp = np.zeros((markers_x * markers_y, 3), np.float32)
+        objp[:, :2] = np.mgrid[0:markers_y, 0:markers_x].T.reshape(-1, 2)
 
-        objp[:,1] *= square_size_x
-        objp[:,0] *= square_size_y
+        objp[:, 1] *= square_size_x
+        objp[:, 0] *= square_size_y
 
         # Arrays to store object points and image points from all the images.
-        objpoints = [] # 3d point in real world space
+        objpoints = []  # 3d point in real world space
 
-        imgpoints1 = [] # 2d points in image plane.
+        imgpoints1 = []  # 2d points in image plane.
         imgpoints2 = []
 
         images_for_camera1 = glob.glob(file_mask1)
@@ -309,7 +308,7 @@ def calculate_calibration(force_recalculate=False, file_mask1='camera_2_image*.p
 
         cv2.destroyAllWindows()
 
-        camera_matrix = np.array([[50, 0, gray1.shape[1]/2],[0, 50, gray1.shape[0]/2],[0,0,1]])
+        camera_matrix = np.array([[50, 0, gray1.shape[1] / 2], [0, 50, gray1.shape[0] / 2], [0, 0, 1]])
         dist_coef = np.zeros(12)
 
         ret1, mtx1, dist1, rvecs1, tvecs1, stdDeviationsIntrinsics1, stdDeviationsExtrinsics1, perViewErrors1 = cv2.calibrateCameraExtended(objpoints, imgpoints1, gray1.shape[::-1], camera_matrix, dist_coef, flags=cv2.CALIB_FIX_PRINCIPAL_POINT, criteria=criteria)
@@ -333,11 +332,11 @@ def calculate_calibration(force_recalculate=False, file_mask1='camera_2_image*.p
         retval = 10
         perViewErrors = None
 
-        while retval > 1 or np.max(perViewErrors) > 1:            
+        while retval > 1 or np.max(perViewErrors) > 1:
             if perViewErrors is not None:
                 std = np.std(perViewErrors)
                 avg = np.average(perViewErrors)
-                
+
                 outliers = []
                 for i in range(len(perViewErrors)):
                     if np.average(perViewErrors[i]) > 3*std and np.average(perViewErrors[i]) > 1.2*avg:
@@ -383,7 +382,7 @@ def calculate_calibration(force_recalculate=False, file_mask1='camera_2_image*.p
 
         width = max(roi1[2], roi2[2])
         height = max(roi1[3], roi2[3])
- 
+
         for fname1, fname2 in zip(images_for_camera1, images_for_camera2):
             img1 = cv2.imread(fname1)
             img2 = cv2.imread(fname2)
@@ -396,9 +395,9 @@ def calculate_calibration(force_recalculate=False, file_mask1='camera_2_image*.p
             # draw the images side by side
             total_size = (max(img_rect1.shape[0], img_rect2.shape[0]), img_rect1.shape[1] + img_rect2.shape[1])
             img = np.zeros(total_size, dtype=np.uint8)
-            img[:img_rect1.shape[0], :img_rect1.shape[1]] = img_rect1
-            img[:img_rect2.shape[0], img_rect1.shape[1]:] = img_rect2
-            
+            img[: img_rect1.shape[0], : img_rect1.shape[1]] = img_rect1
+            img[: img_rect2.shape[0], img_rect1.shape[1] :] = img_rect2
+
             # draw horizontal lines every 25 px accross the side by side image
             for i in range(20, img.shape[0], 25):
                 cv2.line(img, (0, i), (img.shape[1], i), (255, 0, 0))
@@ -489,7 +488,7 @@ def experiment_registration():
         camera.pixel_format = neoapi.PixelFormat_Mono8
 
     for camera in cameras:
-        cv2.namedWindow(camera.name, cv2.WINDOW_NORMAL) 
+        cv2.namedWindow(camera.name, cv2.WINDOW_NORMAL)
         cv2.resizeWindow(camera.name, 550, 450)
 
     images = [[] for camera in cameras]
@@ -502,11 +501,11 @@ def experiment_registration():
         for i, camera in enumerate(cameras):
             images[i] = camera.get_image()
 
-        end_time = time.time() - start_time                                    
-            
+        end_time = time.time() - start_time
+
         print(f'Images from cameras grabbed in {end_time} sec')
 
-        for i, im in enumerate(images):   
+        for i, im in enumerate(images):
             if im is not None:
 
                 im = np.array(im)
@@ -534,13 +533,13 @@ def experiment_registration():
                     else:
                         os.makedirs(path_to_save)
                         for cam_num, _ in enumerate(cameras):
-                            os.makedirs(os.path.join(path_to_save, f'camera{cam_num}'))
+                            os.makedirs(os.path.join(path_to_save, f"camera{cam_num}"))
 
         if registration:
-            reg_image_num += 1   
-        
+            reg_image_num += 1
+
         key = cv2.waitKey(1)
-        if key == 27:    # Esc key to stop
+        if key == 27:  # Esc key to stop
             capturing = False
         elif key == -1:  # normally -1 returned,so don't print it
             continue
@@ -591,7 +590,7 @@ def experiment_registration():
             if not background_substruct:
                 background = [[] for camera in cameras]
                 for i in range(len(cameras)):
-                    background[i] = np.array(images[i]) 
+                    background[i] = np.array(images[i])
                 print(f'Backgrounds saved. Background substruct is on')
                 background_substruct = True
             else:
@@ -609,19 +608,18 @@ def experiment_registration():
                 threshold += 1
                 print(f'Threshold = {threshold}')
         else:
-            print(key) # else print its value 
+            print(key)  # else print its value
 
+    # for i in range(len(cameras)):
+    # print(f'Stop camera {i} in PYbgapi2 system -- {PYbgapi2.stop_camera(i)}')
 
-    #for i in range(len(cameras)):
-        #print(f'Stop camera {i} in PYbgapi2 system -- {PYbgapi2.stop_camera(i)}')
-
-    #print(f'DeInit PYbgapi2 system -- {PYbgapi2.deinit_system()}')
+    # print(f'DeInit PYbgapi2 system -- {PYbgapi2.deinit_system()}')
 
 
 if __name__ == '__main__':
 
-    MARKERS_X = 25 #37 #17
-    MARKERS_Y = 17 #23 #13
+    MARKERS_X = 37  # 25  #17
+    MARKERS_Y = 23  # 17  #13
 
     CALIBRATE_IMAGES_COUNT = 50
     CALIBRATE_IMAGES_PATH = r'.\calibrate_images\\'
@@ -629,8 +627,21 @@ if __name__ == '__main__':
     CALIBRATE_FILE_MASK_2 = r'.\calibrate_images\camera_1_image*.tif'
     RECALCULATE_CALIBRATION = True
 
-    # calibrate_cameras(MARKERS_X, MARKERS_Y, images_count=CALIBRATE_IMAGES_COUNT, save_calibrating_images=True, save_path=CALIBRATE_IMAGES_PATH, blur_threshold=50)
+    calibrate_cameras(
+        MARKERS_X,
+        MARKERS_Y,
+        images_count=CALIBRATE_IMAGES_COUNT,
+        save_calibrating_images=True,
+        save_path=CALIBRATE_IMAGES_PATH,
+        blur_threshold=50,
+    )
 
-    cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T = calculate_calibration(RECALCULATE_CALIBRATION, CALIBRATE_FILE_MASK_1, CALIBRATE_FILE_MASK_2, camera_type='baumer')
+    cameraMatrix1, distCoeffs1, cameraMatrix2, distCoeffs2, R, T = \
+    calculate_calibration(
+        RECALCULATE_CALIBRATION,
+        CALIBRATE_FILE_MASK_1,
+        CALIBRATE_FILE_MASK_2,
+        camera_type="baumer",
+    )
 
-    #experiment_registration()
+    # experiment_registration()
