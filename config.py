@@ -53,10 +53,10 @@ CAMERAS_FOLDER_NAMES = ['cam1', 'cam2']
 SAVE_MEASUREMENT_IMAGE_FILES = False
 
 # Delay between pattern projection and camera image capture in miliseconds
-MEASUREMENT_CAPTURE_DELAY = 300 # ms
+MEASUREMENT_CAPTURE_DELAY = 300  # ms
 
 # File name for calibration data
-CONFIG_FILENAME = r'./config.json'
+CONFIG_FILENAME = r"./config.json"
 
 # Use multiprocessing to increase speed of processing
 USE_MULTIPROCESSING = False
@@ -72,7 +72,7 @@ LAST_MEASUREMENT_PATH = None
 try:
     with open('config.json') as f:
         calibration_data = json.load(f)
-        
+
         try:
             PROJECTOR_MIN_BRIGHTNESS = float(calibration_data['projector']['min_brightness'])
             PROJECTOR_MAX_BRIGHTNESS = float(calibration_data['projector']['max_brightness'])
@@ -82,7 +82,7 @@ try:
             PROJECTOR_GAMMA_C = float(calibration_data['projector']['gamma_c'])
         except:
             pass
-        
+
         try:
             CAMERA_EXPOSURE = [int(calibration_data['cameras']['baumer'][0]['exposure']),
                                int(calibration_data['cameras']['baumer'][1]['exposure'])]
