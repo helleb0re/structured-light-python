@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-try:    
+try:
     import neoapi
 except ImportError:
     neoapi_found = False
@@ -13,26 +13,25 @@ from camera import Camera
 
 
 class CameraBaumer(Camera):
-    def __init__(self, camera : neoapi.Cam):
+    def __init__(self, camera: neoapi.Cam):
         self.camera = camera
         self.camera.Connect()
         self.type = 'baumer'
-        # print(f'Camera {camera.f.DeviceModelName.value} {camera.f.DeviceSerialNumber.value}')
 
     @staticmethod
-    def get_available_cameras(cameras_num_to_find:int=2) -> list[Camera]:
+    def get_available_cameras(cameras_num_to_find: int = 2) -> list[Camera]:
         cameras = []
-        
+
         if neoapi_found:
             for i in range(cameras_num_to_find):
                 camera = CameraBaumer(neoapi.Cam())
 
                 # Set default cameras parameters
-                camera.exposure = 100_000
+                camera.exposure = 20_000
                 camera.gain = 2.0
                 camera.frame_rate_enable = True
-                camera.frame_rate = 25.0
-                camera.camera.f.PixelFormat = neoapi.PixelFormat_Mono12
+                camera.frame_rate = 10.0
+                camera.camera.f.PixelFormat = neoapi.PixelFormat_Mono8
 
                 # Set first camera as master for triggering
                 if i == 0:
@@ -40,11 +39,11 @@ class CameraBaumer(Camera):
                     camera.line_selector = neoapi.LineSelector_Line1
                     camera.line_mode = neoapi.LineMode_Output
                     camera.line_source = neoapi.LineSource_ExposureActive
-                
+
                 # Set next camera as slave for trigger wait
                 if i != 0:
                     camera.trigger_mode = neoapi.TriggerMode_On
-                
+
                 cameras.append(camera)
 
         return cameras
@@ -88,11 +87,11 @@ class CameraBaumer(Camera):
     @property
     def trigger_mode(self):
         return self.camera.f.TriggerMode.value
-    
+
     @trigger_mode.setter
     def trigger_mode(self, x):
         self.camera.f.TriggerMode.value = x
-    
+
     @property
     def line_selector(self):
         return self.camera.f.LineSelector.value
@@ -128,7 +127,7 @@ class CameraBaumer(Camera):
     @property
     def frame_rate(self):
         return self.camera.f.AcquisitionFrameRate.value
-    
+
     @frame_rate.setter
     def frame_rate(self, x):
         self.camera.f.AcquisitionFrameRate.value = x
