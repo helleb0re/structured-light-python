@@ -22,45 +22,36 @@ class Camera(ABC):
 
     @abstractmethod
     def get_image(self) -> np.array:
-        """
+        '''
         Get image from camera
         
         Returns:
             image (numpy array): image as numpy array (2D or 3D depending on color mode)
-        """
+        '''
     
     @abstractproperty
     def exposure(self):
-        """Exposure"""
+        '''Exposure'''
     
     @exposure.setter
     @abstractmethod
     def exposure(self):
-        """Set exposure"""
+        '''Set exposure'''
 
     @abstractproperty
     def gain(self):
-        """Gain"""
+        '''Gain'''
 
     @gain.setter
     @abstractmethod
     def gain(self):
-        """Set gain"""
-    
-    # @abstractproperty
-    # def brightness(self):
-    #     """Brightness"""
-    
-    # @brightness.setter
-    # @abstractmethod
-    # def brightness(self):
-    #     """Set brightness"""
+        '''Set gain'''
     
     @abstractproperty
     def gamma(self):
-        """Gamma"""
+        '''Gamma'''
     
     @gamma.setter
     @abstractmethod
     def gamma(self):
-        """Set gamma"""
+        '''Set gamma'''
