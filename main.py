@@ -29,15 +29,23 @@ from processing import (
 
 from examples.test_plate_phasogrammetry import process_with_phasogrammetry
 
-def initialize_cameras(cam_type: str, cam_to_found_number: int = 2) -> list[Camera]:
+def initialize_cameras(camera_type: str, projector: Projector, cam_to_found_number: int = 2) -> list[Camera]:
     '''
-    Detect connected cameras
+    Search for connected cameras of specified type and links them with projector instance, returns list of detected cameras
+
+    Args:
+        camera_type (str): type of cameras to search
+        projector (Projector): porjector instance to link with cameras instancies
+        cam_to_found_number (int): number of cameras to search
+
+    Returns:
+        cameras (list[camera]): list of detected cameras
     '''
-    if cam_type == 'web':
+    if camera_type == 'web':
         cameras = CameraWeb.get_available_cameras(cam_to_found_number)
-    elif cam_type == 'baumer':
+    elif camera_type == 'baumer':
         cameras = CameraBaumer.get_available_cameras(cam_to_found_number)
-    elif cam_type == 'simulated':
+    elif camera_type == 'simulated':
         cameras = CameraSimulated.get_available_cameras(cam_to_found_number)
         # Set projector for simulated cameras
         for camera in cameras:
@@ -389,7 +397,7 @@ if __name__ == '__main__':
         config.PROJECTOR_MAX_BRIGHTNESS,
     )
 
-    cameras = initialize_cameras(cam_type=config.CAMERA_TYPE, cam_to_found_number=2)
+    cameras = initialize_cameras(config.CAMERA_TYPE, projector, cam_to_found_number=2)
 
     choices = {i for i in range(6)}
 
