@@ -11,7 +11,7 @@ from scipy import signal
 from scipy.optimize import fsolve
 
 import config
-from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm 
+from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm
 
 
 def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[list[float]]=None, frequency: Optional[float]=None, phase_shifting_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step, direct_formula: bool = False) -> tuple[np.ndarray, np.ndarray, np.ndarray] :
@@ -40,7 +40,7 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
             sum012 = 2 * imgs[0] - imgs[1] - imgs[2]
             result_phase = np.arctan2(np.sqrt(3) * (sum12), sum012)
             average_intensity = (imgs[0] + imgs[1] + imgs[2]) / 3
-            modulated_intensity = 1/3 * np.sqrt(3*(sum12)**2 + (sum012)**2)
+            modulated_intensity = 1 / 3 * np.sqrt(3 * (sum12) ** 2 + (sum012) ** 2)
         elif direct_formula and len(phase_shifts) == 4:
             # Calculate formula (21-23) in https://doi.org/10.1016/j.optlaseng.2018.04.019
             sum13 = imgs[1] - imgs[3]
@@ -71,7 +71,7 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
             modulated_intensity = 2 * np.sqrt(np.power(sum1, 2) + np.power(sum2, 2)) / len(images)
         return result_phase, average_intensity, modulated_intensity
     
-    # Calculate shifts if its not defined 
+    # Calculate shifts if its not defined
     if phase_shifts is None:
         phase_shifts = [2 * np.pi / len(images) * n for n in range(len(images))]
 
@@ -81,13 +81,13 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
     # Add images to formed numpy array
     for i in range(len(images)):
         imgs[i] = images[i]
-    
+
     # Depending on phase shift algorithm calculate wrapped phase field
     if phase_shifting_type == PhaseShiftingAlgorithm.n_step:
         # Classic N-step approach
         result_phase, average_intensity, modulated_intensity = calculate_n_step_phase(images, phase_shifts)
     elif phase_shifting_type == PhaseShiftingAlgorithm.double_three_step:
-        # Double three-step approach - average of two 3-step phases (second shifted by PI/3) 
+        # Double three-step approach - average of two 3-step phases (second shifted by PI/3)
         # Calculate formula (26-31) from section 3.2 in https://doi.org/10.1016/j.optlaseng.2018.04.019
         result_phase1, average_intensity1, modulated_intensity1 = calculate_n_step_phase(imgs[:3,:,:], phase_shifts[:3])
         result_phase2, average_intensity2, modulated_intensity2 = calculate_n_step_phase(imgs[3:,:,:], phase_shifts[3:])
@@ -95,7 +95,7 @@ def calculate_phase_generic(images: list[np.ndarray], phase_shifts: Optional[lis
         result_phase = (result_phase1 + result_phase2) / 2
         average_intensity = (average_intensity1 + average_intensity2) / 2
         modulated_intensity = (modulated_intensity1 + modulated_intensity2) / 2
-    
+
     return result_phase, average_intensity, modulated_intensity
 
 
@@ -106,8 +106,8 @@ def calculate_unwraped_phase(phase_l: np.ndarray, phase_h: np.ndarray, lamb_l:fl
     with standard temporal phase unwrapping (TPU) algorithm
 
     Args:
-        phase_l (2D numpy array): The calculated phase for set of PSP images with low frequency (lamb_l) 
-        phase_h (2D numpy array): The calculated phase for set of PSP images with high frequency (lamb_h) 
+        phase_l (2D numpy array): The calculated phase for set of PSP images with low frequency (lamb_l)
+        phase_h (2D numpy array): The calculated phase for set of PSP images with high frequency (lamb_h)
         lamb_l (float): The low spatial frequency for first phase array (phase_l)
         lamb_h (float): The high spatial frequency for second phase array (phase_h)
 
@@ -129,7 +129,7 @@ def calculate_unwraped_phase(phase_l: np.ndarray, phase_h: np.ndarray, lamb_l:fl
 def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
     '''
     Calculate unwrapped phase for FPP measurement instance with the help
-    of calculate_phase_generic and calculate_unwraped_phase functions.    
+    of calculate_phase_generic and calculate_unwraped_phase functions.
     Calculated phase fields will be stored in input measurement argument.
 
     Args:
@@ -146,11 +146,11 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
         unwrapped_phases = []
         avg_ints = []
         mod_ints = []
-        
+
         # Get images for one camera
         images = cam_result.imgs_list
 
-        # Calculate fields for each frequency 
+        # Calculate fields for each frequency
         for i in range(frequency_counts):
 
             images_for_one_frequency = images[i]
@@ -158,13 +158,13 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
             phase, avg_int, mod_int = calculate_phase_generic(images_for_one_frequency, shifts, frequencies[i], phase_shifting_type=measurement.phase_shifting_type)
 
             # Filter phase field with threshold
-            mask = np.where(mod_int > 5, 1, 0) 
+            mask = np.where(mod_int > 5, 1, 0)
             phase = phase * mask
 
             phases.append(phase)
             avg_ints.append(avg_int)
             mod_ints.append(mod_int)
-            
+
             if i == 0:
                 # First phase field should be unit-frequency without ambiguity
                 unwrapped_phases.append(phase)
@@ -178,37 +178,40 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
         cam_result.unwrapped_phases = unwrapped_phases
         cam_result.average_intensities = avg_ints
         cam_result.modulated_intensities = mod_ints
-    
+
 
 def create_polygon(shape, vertices):
-    """
+    '''
     Creates np.array with dimensions defined by shape
     Fills polygon defined by vertices with ones, all other values zero
-    """
+    '''
+
     def check(p1, p2, arr):
         """
-        Uses the line defined by p1 and p2 to check array of 
+        Uses the line defined by p1 and p2 to check array of
         input indices against interpolated value
 
         Returns boolean array, with True inside and False outside of shape
         """
-        idxs = np.indices(arr.shape) # Create 3D array of indices
+        # Create 3D array of indices
+        idxs = np.indices(arr.shape) 
 
         p1 = p1.astype(float)
         p2 = p2.astype(float)
 
         # Calculate max column idx for each row idx based on interpolated line between two points
-        max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) +  p1[1]    
+        max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) + p1[1]
         sign = np.sign(p2[0] - p1[0])
         return idxs[1] * sign <= max_col_idx * sign
 
     base_array = np.zeros(shape, dtype=float)  # Initialize your array of zeros
 
-    fill = np.ones(base_array.shape) * True  # Initialize boolean array defining shape fill
+    # Initialize boolean array defining shape fill
+    fill = np.ones(base_array.shape) * True
 
     # Create check array for each edge segment, combine into fill array
     for k in range(vertices.shape[0]):
-        fill = np.all([fill, check(vertices[k], vertices[k-1], base_array)], axis=0)
+        fill = np.all([fill, check(vertices[k], vertices[k - 1], base_array)], axis=0)
 
     # Set all values inside polygon to one
     base_array[fill] = 1
@@ -247,19 +250,19 @@ def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_e
                     inside = include_edges
                     break
                 # point is to the left from current edge
-                elif x < min(p1x, p2x):  
+                elif x < min(p1x, p2x):
                     inside = not inside
         else:  # p1y!= p2y
             if min(p1y, p2y) <= y <= max(p1y, p2y):
                 xinters = (y - p1y) * (p2x - p1x) / float(p2y - p1y) + p1x
 
                 # point is right on the edge
-                if x == xinters:  
+                if x == xinters:
                     inside = include_edges
                     break
-                
+
                 # point is to the left from current edge
-                if x < xinters:  
+                if x < xinters:
                     inside = not inside
 
         p1x, p1y = p2x, p2y
@@ -316,7 +319,7 @@ def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2
 
     reproj_err1 = np.reshape(reproj_err1, (reproj_err1.shape[0]))
     reproj_err2 = np.reshape(reproj_err2, (reproj_err2.shape[0]))
-    
+
     return points_3d, rms1, rms2, reproj_err1, reproj_err2
 
 
@@ -328,22 +331,25 @@ def calculate_bilinear_interpolation_coeficients(points: tuple[tuple]) -> np.nda
 
     Args:
         points (tuple[tuple]): four elements in format (x, y, f(x, y))
-        
+
     Returns:
         bilinear_coeficients (numpy array): four coeficients for bilinear interploation for input points
     '''
     # Sort points
     points = sorted(points)
-    
+
     # Get x, y coordinates and values for this points
     (x1, y1, q11), (_, y2, q12), (x2, _, q21), (_, _, q22) = points
-    
+
     # Get matrix A
-    A = np.array([[x2*y2, -x2*y1, -x1*y2, x1*y1],
-                  [-y2, y1, y2, -y1],
-                  [-x2, x2, x1, -x1],
-                  [1, -1, -1, 1]
-    ])
+    A = np.array(
+        [
+            [x2 * y2, -x2 * y1, -x1 * y2, x1 * y1],
+            [-y2, y1, y2, -y1],
+            [-x2, x2, x1, -x1],
+            [1, -1, -1, 1],
+        ]
+    )
 
     # Get vector B
     B = np.array([q11, q12, q21, q22])
@@ -371,19 +377,21 @@ def bilinear_phase_fields_approximation(p: tuple[float, float], *data: tuple) ->
     '''
     x, y = p
 
-    a, b, p_h, p_v = data 
+    a, b, p_h, p_v = data
 
-    return (a[0] + a[1]*x + a[2]*y + a[3]*x*y - p_h,
-            b[0] + b[1]*x + b[2]*y + b[3]*x*y - p_v)    
+    return (
+        a[0] + a[1] * x + a[2] * y + a[3] * x * y - p_h,
+        b[0] + b[1] * x + b[2] * y + b[3] * x * y - p_v,
+    )
 
 
 def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.ndarray, p2_v: np.ndarray, x: int, y: int, LUT:list[list[list[int]]]=None) -> tuple[float, float]:
     '''
     Finds the corresponding point coordinates for the second image using the phasogrammetry approach 
 
-    For the given coordinates x and y, the phase values on the fields for the vertical and horizontal fringes 
-    for the images of the first camera are determined. Then two isolines with defined values of the phase on 
-    the corresponding fields for the second camera are found. The intersection of the isolines gives the 
+    For the given coordinates x and y, the phase values on the fields for the vertical and horizontal fringes
+    for the images of the first camera are determined. Then two isolines with defined values of the phase on
+    the corresponding fields for the second camera are found. The intersection of the isolines gives the
     coordinates of the corresponding point on the image from the second camera.
 
     Args:
@@ -401,16 +409,18 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     phase_h = p1_h[y, x]
     phase_v = p1_v[y, x]
 
+    retval = [np.inf, np.inf]
+
     # If LUT available calculate corresponding points with it
     if LUT is not None:
         # Get value for x, y coordinate from LUT as first approximation
-        try: 
+        try:
             phase_h_index = LUT[-2].index(int(np.round(phase_h)))
             phase_v_index = LUT[-1].index(int(np.round(phase_v)))
         except:
             # phases values not found in LUT
-            return -1, -1
-        
+            return -1, -1, retval
+
         cor_points = LUT[phase_v_index][phase_h_index]
 
         if len(cor_points) > 0 and len(cor_points) < 20:
@@ -420,7 +430,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
             iter_num = 0
 
             # Iterate thru variants of x and y where fields are near to phase_v and phase_h
-            while iter_num < 5: 
+            while iter_num < 1:
                 # Get neareast coords to current values of x and y
                 if int(np.round(x0)) - x0 == 0:
                     x1 = int(x0 - 1)
@@ -435,35 +445,41 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
                 else:
                     y1 = int(np.floor(y0))
                     y2 = int(np.ceil(y0))
-  
+
                 # Check if coords are on field (are positive and less than field shape)
                 if x1 > 0 and x2 > 0 and y1 > 0 and y2 > 0 and x1 < p1_h.shape[1] and x2 < p1_h.shape[1] and y1 < p1_h.shape[0] and y2 < p1_h.shape[0]:
 
                     # Get coeficients for bilinear interploation for horizontal phase
                     aa = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_h[y1, x1]), (x1, y2, p2_h[y2, x1]),
-                                                                    (x2, y2, p2_h[y2, x2]), (x2, y1, p2_h[y2, x1])))
+                                                                       (x2, y2, p2_h[y2, x2]), (x2, y1, p2_h[y2, x1])))
                     # Get coeficients for bilinear interploation for vertical phase
                     bb = calculate_bilinear_interpolation_coeficients(((x1, y1, p2_v[y1, x1]), (x1, y2, p2_v[y2, x1]),
-                                                                    (x2, y2, p2_v[y2, x2]), (x2, y1, p2_v[y2, x1])))
+                                                                       (x2, y2, p2_v[y2, x2]), (x2, y1, p2_v[y2, x1])))
 
                     # Find there bilinear interploation is equal to phase_h and phase_v
                     x0, y0 =  fsolve(bilinear_phase_fields_approximation, (x1, y1), args=(aa, bb, phase_h, phase_v))
+                    # x0, y0 = minimize(
+                    #     bilinear_phase_fields_approximation,
+                    #     (x0, y0),
+                    #     args=(aa, bb, phase_h, phase_v),
+                    #     bounds=Bounds([x1, y1], [x2, y2]),
+                    #     method="Powell",
+                    # ).x
 
-                    # TODO: Return residiuals from function
                     # Calculate residiuals
                     h_res, v_res = bilinear_phase_fields_approximation((x0, y0), aa, bb, phase_h, phase_v) 
 
                     # Check if x and y are between x1, x2, y1 and y2
-                    if x2 > x0 > x1 and y2 > y0 > y1:
-                        return x0, y0
+                    if x2 >= x0 >= x1 and y2 >= y0 >= y1:
+                        return x0, y0, [h_res, v_res]
                     else:
                         iter_num = iter_num + 1
                 else:
-                    return -1, -1
+                    return -1, -1, [np.inf, np.inf]
 
-            return -1, -1
+            return -1, -1, [np.inf, np.inf]
         else:
-            return -1, -1
+            return -1, -1, [np.inf, np.inf]
 
     # Find coords of isophase curves
     y_h, x_h = np.where(np.isclose(p2_h, phase_h, atol=10**-1))
@@ -473,7 +489,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     if y_h.size == 0 or y_v.size == 0:
         return -1, -1
 
-    # A faster way to calculate using a flatten array 
+    # A faster way to calculate using a flatten array
     # _, yx_h = np.unravel_index(np.where(np.isclose(p2_h, p1_h[y, x], atol=10**-1)), p2_h.shape)
     # _, yx_v = np.unravel_index(np.where(np.isclose(p2_v, p1_v[y, x], atol=10**-1)), p2_v.shape)
 
@@ -504,14 +520,14 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     x_v = x_v[np.newaxis, :]
 
     # Calculate distance between points in coords
-    distance = np.sqrt((x_h - x_v)**2 + (y_h - y_v)**2)
+    distance = np.sqrt((x_h - x_v) ** 2 + (y_h - y_v) ** 2)
 
     # Find indicies of minimum distance
     i_h_min, i_v_min = np.where(distance == distance.min())
     i_v_min = i_v_min[0]
     i_h_min = i_h_min[0]
 
-    # A faster way to calculate using a flatten array 
+    # A faster way to calculate using a flatten array
     # i_h_min, i_v_min = np.unravel_index(np.where(distance.ravel()==distance.min()), distance.shape)
     # i_v_min = i_v_min[0][0]
     # i_h_min = i_h_min[0][0]
@@ -566,22 +582,22 @@ def get_phasogrammetry_correlation(p1_h: np.ndarray, p1_v: np.ndarray, p2_h: np.
                 corelation_field[j, i] = t
 
                 # Find maximum indexes for x and y
-    maximum = np.unravel_index(corelation_field.argmax(), corelation_field.shape)                        
+    maximum = np.unravel_index(corelation_field.argmax(), corelation_field.shape)
 
-    # Get neighborhood pixels of maximum at X axis 
+    # Get neighborhood pixels of maximum at X axis
     cx0 = np.fabs(corelation_field[maximum[0], maximum[1] - 1])
     cx1 = np.fabs(corelation_field[maximum[0], maximum[1]    ])
 
-    if (maximum[1] == corelation_field.shape[1]):
+    if maximum[1] == corelation_field.shape[1]:
         cx2 = np.fabs(corelation_field[maximum[0], maximum[1] + 1])
     else:
         cx2 = np.fabs(corelation_field[maximum[0], 0])
 
-    # Get neighborhood pixels of maximum at Y axis 
+    # Get neighborhood pixels of maximum at Y axis
     cy0 = np.fabs(corelation_field[maximum[0] - 1, maximum[1]])
     cy1 = np.fabs(corelation_field[maximum[0]    , maximum[1]])
 
-    if (maximum[0] == corelation_field.shape[0]):
+    if maximum[0] == corelation_field.shape[0]:
         cy2 = np.fabs(corelation_field[maximum[0] + 1, maximum[1]])
     else:
         cy2 = np.fabs(corelation_field[0, maximum[1]])
@@ -639,10 +655,10 @@ def get_phase_field_ROI(fpp_measurement: FPPMeasurement, signal_to_nose_threshol
         cam_result.signal_to_noise_mask[signal_to_nose > signal_to_nose_threshold] = 1
 
         # Determine four points around thresholded area
-        x_min = np.min(thresholded_coords[:,1])
-        x_max = np.max(thresholded_coords[:,1])
-        y_min = np.min(thresholded_coords[:,0])
-        y_max = np.max(thresholded_coords[:,0])
+        x_min = np.min(thresholded_coords[:, 1])
+        x_max = np.max(thresholded_coords[:, 1])
+        y_min = np.min(thresholded_coords[:, 0])
+        y_max = np.max(thresholded_coords[:, 0])
 
         # Store determined ROI
         cam_result.ROI = np.array([[x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]])
@@ -699,7 +715,7 @@ def get_phase_field_LUT(measurement: FPPMeasurement) -> list[list[list]]:
     w = p_h.shape[1]
     h = p_h.shape[0]
 
-    # Phase rounding with an offset so that they start from zero  
+    # Phase rounding with an offset so that they start from zero
     p_h_r = np.round(p_h - ph_min).astype(int).tolist()
     p_v_r = np.round(p_v - pv_min).astype(int).tolist()
 
@@ -709,7 +725,7 @@ def get_phase_field_LUT(measurement: FPPMeasurement) -> list[list[list]]:
             if cam2_meas_h.signal_to_noise_mask[y, x] == 1 and cam2_meas_v.signal_to_noise_mask[y, x] == 1:
                 if pv_max - pv_min >= p_v_r[y][x] >= 0 and ph_max - ph_min >= p_h_r[y][x] >= 0:
                     LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
-    
+
     # Add range of horizontal and vertical phases at the end of LUT
     LUT.append(np.round(h_range).astype(int).tolist())
     LUT.append(np.round(v_range).astype(int).tolist())
@@ -729,7 +745,7 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
         points_1 (numpy array [N, 2]): corresponding 2D points from first camera
         points_2 (numpy array [N, 2]): corresponding 2D points from second camera
     '''
-    # Take phases with highest frequencies 
+    # Take phases with highest frequencies
     p1_h = measurement.camera_results[2].unwrapped_phases[-1]
     p2_h = measurement.camera_results[3].unwrapped_phases[-1]
 
@@ -762,7 +778,7 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
     coords_to_delete = []
 
     if config.USE_MULTIPROCESSING:
-        # Use parallel calaculation to increase processing speed 
+        # Use parallel calaculation to increase processing speed
         with multiprocessing.Pool(config.POOLS_NUMBER) as p:
             coords2 = p.starmap(find_phasogrammetry_corresponding_point, [(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1], LUT) for i in range(len(coords1))])
 
@@ -798,13 +814,13 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
     distance = []
 
     for point1, point2 in zip(coords1, coords2):
-        image1_points.append([point1[0], point1[1]]) 
+        image1_points.append([point1[0], point1[1]])
         image2_points.append([point2[0], point2[1]])
         distance.append(((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)**0.5)
 
     # Remove outliers
     std_d = np.std(distance)
-    indicies_to_delete = [i for i in range(len(distance)) if distance[i] > std_d*10]
+    indicies_to_delete = [i for i in range(len(distance)) if distance[i] > std_d * 10]
     for index in reversed(indicies_to_delete):
         image1_points.pop(index)
         image2_points.pop(index)
@@ -837,12 +853,12 @@ def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_siz
     # Get interrogation windows
     list_of_windows = [[], []]
     list_of_coords = []
-    
+
     width = field1.shape[1]
     height = field1.shape[0]
-    num_win_x = range(int(np.floor((width - win_size_x)/step_x + 1)))
-    num_win_y = range(int(np.floor((height - win_size_y)/step_y + 1)))
-       
+    num_win_x = range(int(np.floor((width - win_size_x) / step_x + 1)))
+    num_win_y = range(int(np.floor((height - win_size_y) / step_y + 1)))
+
     for i in num_win_x:
         start_x = step_x * i
         end_x = step_x * i + win_size_x
@@ -889,24 +905,24 @@ def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_siz
     maximums_list = []
 
     for i in range(len(correlation_list)):
-        
+
         # Find maximum indexes for x and y
         maximum = np.unravel_index(correlation_list[i].argmax(), correlation_list[i].shape)                        
 
-        # Get neighborhood pixels of maximum at X axis 
+        # Get neighborhood pixels of maximum at X axis
         cx0 = np.fabs(correlation_list[i][maximum[0], maximum[1] - 1])
         cx1 = np.fabs(correlation_list[i][maximum[0], maximum[1]    ])
 
-        if (maximum[1] == correlation_list[i].shape[1]):
+        if maximum[1] == correlation_list[i].shape[1]:
             cx2 = np.fabs(correlation_list[i][maximum[0], maximum[1] + 1])
         else:
             cx2 = np.fabs(correlation_list[i][maximum[0], 0])
 
-        # Get neighborhood pixels of maximum at Y axis 
+        # Get neighborhood pixels of maximum at Y axis
         cy0 = np.fabs(correlation_list[i][maximum[0] - 1, maximum[1]])
         cy1 = np.fabs(correlation_list[i][maximum[0]    , maximum[1]])
 
-        if (maximum[0] == correlation_list[i].shape[0]):
+        if maximum[0] == correlation_list[i].shape[0]:
             cy2 = np.fabs(correlation_list[i][maximum[0] + 1, maximum[1]])
         else:
             cy2 = np.fabs(correlation_list[i][0, maximum[1]])
@@ -920,7 +936,6 @@ def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_siz
             y_max = maximum[0] + (np.log(np.abs(cy0))  - np.log(np.abs(cy2)))/(2 * np.log(np.abs(cy0)) - 4 * np.log(np.abs(cy1)) + 2 * np.log(np.abs(cy2)))
         except (ZeroDivisionError, ValueError):
             y_max = 0
-
 
         # Shift maximum due to pereodic of correlation function
         if x_max > correlation_list[i].shape[0] / 2:
