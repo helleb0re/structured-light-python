@@ -19,11 +19,17 @@ from create_patterns import create_psp_templates
 from hand_set_up_camera import camera_adjust, camera_baumer_adjust
 from min_max_projector_calibration import MinMaxProjectorCalibration
 from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm, CameraMeasurement
-from processing import process_fppmeasurement_with_phasogrammetry, calculate_phase_for_fppmeasurement, get_phase_field_ROI, get_phase_field_LUT, calculate_displacement_field
+from processing import (
+    process_fppmeasurement_with_phasogrammetry,
+    calculate_phase_for_fppmeasurement,
+    get_phase_field_ROI,
+    get_phase_field_LUT,
+    calculate_displacement_field,
+)
 
 from examples.test_plate_phasogrammetry import process_with_phasogrammetry
 
-def initialize_cameras(cam_type: str, cam_to_found_number: int=2) -> list[Camera]:
+def initialize_cameras(cam_type: str, cam_to_found_number: int = 2) -> list[Camera]:
     '''
     Detect connected cameras
     '''
@@ -45,9 +51,9 @@ def adjust_cameras(cameras: list[Camera]) -> None:
     with visual control
     '''
     for i, camera in enumerate(cameras):
-        if camera.type == 'web':
+        if camera.type == "web":
             camera_adjust(camera)
-        elif camera.type == 'baumer':
+        elif camera.type == "baumer":
             exposure, gamma, gain = camera_baumer_adjust(camera)
             config.CAMERA_EXPOSURE[i] = exposure
             config.CAMERA_GAIN[i] = gain
@@ -56,7 +62,7 @@ def adjust_cameras(cameras: list[Camera]) -> None:
     config.save_calibration_data()
 
 
-def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
+def calibrate_projector(cameras: list[Camera], projector: Projector) -> None:
     '''
     Сalibrate projector image with gamma correction
 
@@ -85,19 +91,21 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     brt_reduced = brightness[:saturation]
 
     # Gamma function to fit
-    lam = lambda x,a,b,c: a*(x + c)**b
+    lam = lambda x, a, b, c: a * (x + c) ** b
 
     # Fit gamma function parameters for reduced brightness vs intensity sequence
-    popt, pcov = optimize.curve_fit(lam, int_reduced, brt_reduced, p0=(1,1,1))
-    print(f'Fitted gamma function - Iout = {popt[0]:.3f} * (Iin + {popt[2]:.3f}) ^ {popt[1]:.3f}')
+    popt, pcov = optimize.curve_fit(lam, int_reduced, brt_reduced, p0=(1, 1, 1))
+    print(
+        f"Fitted gamma function - Iout = {popt[0]:.3f} * (Iin + {popt[2]:.3f}) ^ {popt[1]:.3f}"
+    )
 
     # Draw fitted gamma function
     gg = lam(intensity, *popt)
 
-    plt.plot(intensity, brightness, 'b+')
-    plt.plot(intensity, gg, 'r-')
-    plt.xlabel('Intensity, relative units')
-    plt.ylabel('Brightness, relative units')
+    plt.plot(intensity, brightness, "b+")
+    plt.plot(intensity, gg, "r-")
+    plt.xlabel("Intensity, relative units")
+    plt.ylabel("Brightness, relative units")
     plt.xlim((0, 1))
     plt.ylim((0, 1))
     plt.grid()
@@ -110,12 +118,14 @@ def calibrate_projector(cameras : list[Camera], projector: Projector) -> None :
     config.save_calibration_data()
 
     # Check gamma correction
-    brt_corrected, _ = get_brightness_vs_intensity(cameras, projector, use_correction=True)
+    brt_corrected, _ = get_brightness_vs_intensity(
+        cameras, projector, use_correction=True
+    )
 
     # Draw corrected brightness vs intensity
-    plt.plot(intensity, brt_corrected, 'b+')
-    plt.xlabel('Intensity, relative units')
-    plt.ylabel('Brightness, relative units')
+    plt.plot(intensity, brt_corrected, "b+")
+    plt.xlabel("Intensity, relative units")
+    plt.ylabel("Brightness, relative units")
     plt.xlim((0, 1))
     plt.ylim((0, 1))
     plt.grid()
@@ -144,36 +154,36 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
     max_intensity = 1024
     average_num = 5
     border_width = 20
-    
+
     projector.set_up_window()
-    
+
     # TODO: Make generic to number of cameras
     brightness1 = []
     brightness2 = []
 
     # Make thin black and white borders
     image = np.zeros((projector.height, projector.width))
-    image[border_width:-border_width,border_width:-border_width] = max_intensity
-    
+    image[border_width:-border_width, border_width:-border_width] = max_intensity
+
     temp_img = cameras[0].get_image()
 
     for intensity in range(max_intensity):
-        image[2*border_width:-2*border_width,2*border_width:-2*border_width] = intensity / max_intensity
+        image[2 * border_width: -2 * border_width, 2 * border_width: -2 * border_width] = intensity / max_intensity
         projector.project_pattern(image, use_correction)
 
         img1 = np.zeros(temp_img.shape, dtype=np.float64)
         img2 = np.zeros(temp_img.shape, dtype=np.float64)
-        
+
         for _ in range(average_num):
             cv2.waitKey(config.MEASUREMENT_CAPTURE_DELAY)
 
             img1 = img1 + cameras[0].get_image()
             img2 = img2 + cameras[1].get_image()
         
-        img1 = img1 / average_num 
-        img2 = img2 / average_num 
-        roi_x = slice(int(img1.shape[1]/2 - win_size_x), int(img1.shape[1]/2 + win_size_x))
-        roi_y = slice(int(img1.shape[0]/2 - win_size_y), int(img1.shape[0]/2 + win_size_y))
+        img1 = img1 / average_num
+        img2 = img2 / average_num
+        roi_x = slice(int(img1.shape[1] / 2 - win_size_x), int(img1.shape[1] / 2 + win_size_x))
+        roi_y = slice(int(img1.shape[0] / 2 - win_size_y), int(img1.shape[0] / 2 + win_size_y))
         brt1 = np.mean(img1[roi_y, roi_x]) / max_intensity
         brt2 = np.mean(img2[roi_y, roi_x]) / max_intensity
 
@@ -181,15 +191,49 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
         brightness2.append(brt2)
 
         img_to_display1 = img1.astype(np.uint16)
-        cv2.rectangle(img_to_display1, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
-        cv2.putText(img_to_display1, f'{intensity = }', (50,50), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
-        cv2.putText(img_to_display1, f'Brightness = {brt1:.3f}', (50,100), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
+        cv2.rectangle(
+            img_to_display1,
+            (roi_x.start, roi_y.start),
+            (roi_x.stop, roi_y.stop),
+            (255, 0, 0), 3,
+        )
+        cv2.putText(
+            img_to_display1,
+            f"{intensity = }",
+            (50, 50),
+            cv2.FONT_HERSHEY_PLAIN,
+            5, (255, 0, 0), 2,
+        )
+        cv2.putText(
+            img_to_display1,
+            f"Brightness = {brt1:.3f}",
+            (50, 100),
+            cv2.FONT_HERSHEY_PLAIN,
+            5, (255, 0, 0), 2,
+        )
         cv2.imshow('cam1', img_to_display1)
 
         img_to_display2 = img2.astype(np.uint16)
-        cv2.rectangle(img_to_display2, (roi_x.start, roi_y.start), (roi_x.stop, roi_y.stop), (255, 0, 0), 3)
-        cv2.putText(img_to_display2, f'{intensity = }', (50,50), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
-        cv2.putText(img_to_display2, f'Brightness = {brt2:.3f}', (50,100), cv2.FONT_HERSHEY_PLAIN, 5, (255,0,0), 2)
+        cv2.rectangle(
+            img_to_display2,
+            (roi_x.start, roi_y.start),
+            (roi_x.stop, roi_y.stop),
+            (255, 0, 0), 3,
+        )
+        cv2.putText(
+            img_to_display2,
+            f"{intensity = }",
+            (50, 50),
+            cv2.FONT_HERSHEY_PLAIN,
+            5, (255, 0, 0), 2,
+        )
+        cv2.putText(
+            img_to_display2,
+            f"Brightness = {brt2:.3f}",
+            (50, 100),
+            cv2.FONT_HERSHEY_PLAIN,
+            5, (255, 0, 0), 2,
+        )
         cv2.imshow('cam2', img_to_display2)
 
     projector.close_window()
@@ -222,33 +266,34 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
     frequencies = [1, 4, 12, 48, 90]
 
     # Create phase shift profilometry patterns
-    patterns_v, _ = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, shifts_number=shift_num, vertical=True)
-    patterns_h, phase_shifts = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, phase_shift_type, shifts_number=shift_num, vertical=False)
+    patterns_v, _ = create_psp_templates(
+        config.PROJECTOR_WIDTH,
+        config.PROJECTOR_HEIGHT,
+        frequencies,
+        phase_shift_type,
+        shifts_number=shift_num,
+        vertical=True,
+    )
+    patterns_h, phase_shifts = create_psp_templates(
+        config.PROJECTOR_WIDTH,
+        config.PROJECTOR_HEIGHT,
+        frequencies,
+        phase_shift_type,
+        shifts_number=shift_num,
+        vertical=False,
+    )
 
     patterns_vh = {'vertical': patterns_v, 'horizontal': patterns_h}
 
     cam_results = [
-        CameraMeasurement(
-            fringe_orientation='vertical'
-        ),
-        CameraMeasurement(
-            fringe_orientation='vertical'
-        ),
-        CameraMeasurement(
-            fringe_orientation='horizontal'
-        ),
-        CameraMeasurement(
-            fringe_orientation='horizontal'
-        )
+        CameraMeasurement(fringe_orientation='vertical'),
+        CameraMeasurement(fringe_orientation='vertical'),
+        CameraMeasurement(fringe_orientation='horizontal'),
+        CameraMeasurement(fringe_orientation='horizontal'),
     ]
-    
+
     # Create FPPMeasurement instance with results
-    meas = FPPMeasurement(
-        phase_shift_type,
-        frequencies,
-        phase_shifts,
-        cam_results        
-    )
+    meas = FPPMeasurement(phase_shift_type, frequencies, phase_shifts, cam_results)
 
     # Create folders to save measurement results if defined in config
     if config.SAVE_MEASUREMENT_IMAGE_FILES:
@@ -265,7 +310,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
         
         orientation = res1.fringe_orientation
         patterns = patterns_vh[orientation]
-        
+
         # Iter thru generated patterns
         for i in range(len(patterns)):
 
@@ -295,8 +340,8 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
                     frames_1.append(cameras[0].get_image())
                     frames_2.append(cameras[1].get_image())
 
-                frame_1 = np.mean(frames_1, axis=0).astype(np.uint16)
-                frame_2 = np.mean(frames_2, axis=0).astype(np.uint16)
+                frame_1 = np.mean(frames_1, axis=0).astype(np.uint8)
+                frame_2 = np.mean(frames_2, axis=0).astype(np.uint8)
 
                 cv2.imshow('cam1', frame_1)
                 cv2.imshow('cam2', frame_2)
@@ -317,7 +362,7 @@ def capture_measurement_images(cameras: list[Camera], projector: Projector, phas
                 else:
                     res1.imgs_list[-1].append(frame_1)
                     res2.imgs_list[-1].append(frame_2)
-    
+
     # Stop projector
     projector.close_window()
 
@@ -341,7 +386,8 @@ if __name__ == '__main__':
         config.PROJECTOR_WIDTH,
         config.PROJECTOR_HEIGHT,
         config.PROJECTOR_MIN_BRIGHTNESS,
-        config.PROJECTOR_MAX_BRIGHTNESS)
+        config.PROJECTOR_MAX_BRIGHTNESS,
+    )
 
     cameras = initialize_cameras(cam_type=config.CAMERA_TYPE, cam_to_found_number=2)
 
@@ -350,7 +396,7 @@ if __name__ == '__main__':
     while True:
         print(f"Connected {len(cameras)} camera(s)")
         print("==========================================================")
-        print("1 - Adjust cameras")        
+        print("1 - Adjust cameras")
         print("2 - Projector gamma correction calibration")
         print("3 - Check brightness profile")
         print("4 - Take measurements")
@@ -359,26 +405,36 @@ if __name__ == '__main__':
         answer = input("Type something from the suggested list above: ")
 
         try:
-            if int(answer) not in choices: raise Exception()
+            if int(answer) not in choices:
+                raise Exception()
         except:
             continue
         else:
             choice = int(answer)
 
-        if (choice == 0):
+        if choice == 0:
             break
 
-        elif (choice == 1):
+        elif choice == 1:
             adjust_cameras(cameras)
 
-        elif (choice == 2):
+        elif choice == 2:
             calibrate_projector(cameras, projector)
 
-        elif (choice == 3):
+        elif choice == 3:
             frequencies = [1, 4, 16, 64, 100, 120]
-            test_pattern, _ = create_psp_templates(config.PROJECTOR_WIDTH, config.PROJECTOR_HEIGHT, frequencies, PhaseShiftingAlgorithm.n_step, 1, vertical=False)
+            test_pattern, _ = create_psp_templates(
+                config.PROJECTOR_WIDTH,
+                config.PROJECTOR_HEIGHT,
+                frequencies,
+                PhaseShiftingAlgorithm.n_step,
+                1,
+                vertical=False,
+            )
             MinMaxProjectorCalibration(test_pattern, cameras, projector)
 
-        elif (choice == 4):
-            measurement = capture_measurement_images(cameras, projector, phase_shift_type=PhaseShiftingAlgorithm.n_step)            
+        elif choice == 4:
+            measurement = capture_measurement_images(
+                cameras, projector, phase_shift_type=PhaseShiftingAlgorithm.n_step
+            )
             process_with_phasogrammetry(measurement)
