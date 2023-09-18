@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import List
+
 import numpy as np
 
 try:
@@ -19,12 +21,21 @@ class CameraBaumer(Camera):
         self.type = 'baumer'
 
     @staticmethod
-    def get_available_cameras(cameras_num_to_find: int = 2) -> list[Camera]:
+    def get_available_cameras(cameras_num_to_find: int = 2, cameras_serial_numbers: List[str] = []) -> list[Camera]:
         cameras = []
 
         if neoapi_found:
-            for i in range(cameras_num_to_find):
+            i = 0
+            
+            while i < cameras_num_to_find:
+                # Get next camera from neoapi
                 camera = CameraBaumer(neoapi.Cam())
+                
+                # Check camera serial is in defined list (if list not empty)
+                if (len(cameras_serial_numbers) > 0 and 
+                    camera.camera.f.DeviceSerialNumber not in cameras_serial_numbers):
+                    camera.camera.Disconnect()
+                    continue  
 
                 # Set default cameras parameters
                 camera.exposure = 20_000
@@ -45,6 +56,7 @@ class CameraBaumer(Camera):
                     camera.trigger_mode = neoapi.TriggerMode_On
 
                 cameras.append(camera)
+                i = i + 1
 
         return cameras
 

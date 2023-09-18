@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import json
 from datetime import datetime
+from typing import List
 
 import cv2
 import numpy as np
@@ -19,17 +20,16 @@ from create_patterns import create_psp_templates
 from hand_set_up_camera import camera_adjust, camera_baumer_adjust
 from min_max_projector_calibration import MinMaxProjectorCalibration
 from fpp_structures import FPPMeasurement, PhaseShiftingAlgorithm, CameraMeasurement
-from processing import (
-    process_fppmeasurement_with_phasogrammetry,
-    calculate_phase_for_fppmeasurement,
-    get_phase_field_ROI,
-    get_phase_field_LUT,
-    calculate_displacement_field,
-)
+
 
 from examples.test_plate_phasogrammetry import process_with_phasogrammetry
 
-def initialize_cameras(camera_type: str, projector: Projector, cam_to_found_number: int = 2) -> list[Camera]:
+def initialize_cameras(
+    camera_type: str, 
+    projector: Projector, 
+    cam_to_found_number: int = 2, 
+    cameras_serial_numbers: List[str] = []
+    ) -> list[Camera]:
     '''
     Search for connected cameras of specified type and links them with projector instance, returns list of detected cameras
 
@@ -37,6 +37,7 @@ def initialize_cameras(camera_type: str, projector: Projector, cam_to_found_numb
         camera_type (str): type of cameras to search
         projector (Projector): porjector instance to link with cameras instancies
         cam_to_found_number (int): number of cameras to search
+        cameras_serial_numbers (List[str]): list of cameras' serial numbers to search
 
     Returns:
         cameras (list[camera]): list of detected cameras
@@ -44,7 +45,7 @@ def initialize_cameras(camera_type: str, projector: Projector, cam_to_found_numb
     if camera_type == 'web':
         cameras = CameraWeb.get_available_cameras(cam_to_found_number)
     elif camera_type == 'baumer':
-        cameras = CameraBaumer.get_available_cameras(cam_to_found_number)
+        cameras = CameraBaumer.get_available_cameras(cam_to_found_number, cameras_serial_numbers)
     elif camera_type == 'simulated':
         cameras = CameraSimulated.get_available_cameras(cam_to_found_number)
         # Set projector for simulated cameras
@@ -251,7 +252,11 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
     return brightness1, brightness2
 
 
-def capture_measurement_images(cameras: list[Camera], projector: Projector, phase_shift_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step) -> tuple[FPPMeasurement, FPPMeasurement]:
+def capture_measurement_images(
+    cameras: list[Camera],
+    projector: Projector, 
+    phase_shift_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step
+    ) -> tuple[FPPMeasurement, FPPMeasurement]:
     '''
     Do fringe projection measurement. Generate pattern, project them via projector and capture images with cameras.
 
