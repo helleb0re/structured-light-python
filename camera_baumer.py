@@ -15,9 +15,12 @@ from camera import Camera
 
 
 class CameraBaumer(Camera):
-    def __init__(self, camera: neoapi.Cam):
+    def __init__(self, camera: neoapi.Cam, serial_number: str = None):
         self.camera = camera
-        self.camera.Connect()
+        if serial_number is not None:
+            self.camera.Connect(serial_number)
+        else:
+            self.camera.Connect()
         self.type = 'baumer'
 
     @staticmethod
@@ -29,14 +32,13 @@ class CameraBaumer(Camera):
             
             while i < cameras_num_to_find:
                 # Get next camera from neoapi
-                camera = CameraBaumer(neoapi.Cam())
+                if len(cameras_serial_numbers) == 0:
+                    camera = CameraBaumer(neoapi.Cam())
+                else:
+                    camera = CameraBaumer(neoapi.Cam(), cameras_serial_numbers[i])
+                    if camera.camera.f.DeviceSerialNumber.value not in cameras_serial_numbers:
+                        raise Exception(f'Error, camera serial number is not {cameras_serial_numbers[i]}')
                 
-                # Check camera serial is in defined list (if list not empty)
-                if (len(cameras_serial_numbers) > 0 and 
-                    camera.camera.f.DeviceSerialNumber not in cameras_serial_numbers):
-                    camera.camera.Disconnect()
-                    continue  
-
                 # Set default cameras parameters
                 camera.exposure = 20_000
                 camera.gain = 2.0
@@ -50,10 +52,11 @@ class CameraBaumer(Camera):
                     camera.line_selector = neoapi.LineSelector_Line1
                     camera.line_mode = neoapi.LineMode_Output
                     camera.line_source = neoapi.LineSource_ExposureActive
-
-                # Set next camera as slave for trigger wait
-                if i != 0:
+                else:
+                    # Set next camera as slave for trigger wait
                     camera.trigger_mode = neoapi.TriggerMode_On
+                    camera.line_selector = neoapi.LineSelector_Line1
+                    camera.line_mode = neoapi.LineMode_Input
 
                 cameras.append(camera)
                 i = i + 1
