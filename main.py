@@ -26,7 +26,7 @@ from examples.test_plate_phasogrammetry import process_with_phasogrammetry
 
 def initialize_cameras(
     camera_type: str, 
-    projector: Projector, 
+    projector: Projector=None, 
     cam_to_found_number: int = 2, 
     cameras_serial_numbers: List[str] = []
     ) -> list[Camera]:
@@ -49,8 +49,9 @@ def initialize_cameras(
     elif camera_type == 'simulated':
         cameras = CameraSimulated.get_available_cameras(cam_to_found_number)
         # Set projector for simulated cameras
-        for camera in cameras:
-            camera.projector = projector
+        if projector is not None:
+            for camera in cameras:
+                camera.projector = projector
     return cameras
 
 
