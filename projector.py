@@ -49,6 +49,21 @@ class Projector():
         # Show image at OpenCV GUI window
         cv2.imshow('Projector window', self._corrected_pattern)
 
+    def project_black_background(self) -> None:
+        '''
+        Project black pattern thru OpenCV GUI window for projector off emulation
+        '''
+        # Open OpenCV GUI window, if it is has not been already opened
+        if not self.window_exist:
+            self.set_up_window()
+        
+        # Create black bakground image
+        background = np.zeros((self.height, self.width))
+        
+        # Show image at OpenCV GUI window
+        cv2.imshow('Projector window', background)
+        cv2.waitKey(200)
+
     def close_window(self) -> None:
         '''
         Close opened OpenCV GUI window on second extended screen
