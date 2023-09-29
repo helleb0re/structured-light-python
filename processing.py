@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 import multiprocessing
-from typing import Optional
 from multiprocessing import Pool
+from typing import Optional, Tuple
 
 import cv2
 import numpy as np
@@ -180,10 +180,19 @@ def calculate_phase_for_fppmeasurement(measurement: FPPMeasurement):
         cam_result.modulated_intensities = mod_ints
 
 
-def create_polygon(shape, vertices):
+def create_polygon(shape: Tuple[int], vertices: np.ndarray) -> np.ndarray:
     '''
-    Creates np.array with dimensions defined by shape
-    Fills polygon defined by vertices with ones, all other values zero
+    Creates 2D numpy array with poligon defined by vertices. 
+    Points inside polygon fills with ones, all overs with zeros.
+
+    From https://stackoverflow.com/a/37123933
+
+    Args:
+        shape (tuple of int): The shape of 2D numpy array to generate
+        vertices (2D numpy array): The 2D numpy array with shape (N, 2) and coordinates of polygon vercities in it ([[x0, y0], ..., [xn, yn]])
+
+    Returns:
+        base_array (2D numpy array): 2D numpy array with poligon filled by ones
     '''
 
     def check(p1, p2, arr):
@@ -196,12 +205,17 @@ def create_polygon(shape, vertices):
         # Create 3D array of indices
         idxs = np.indices(arr.shape) 
 
-        p1 = p1.astype(float)
-        p2 = p2.astype(float)
+        p1 = p1[::-1].astype(float)
+        p2 = p2[::-1].astype(float)
 
         # Calculate max column idx for each row idx based on interpolated line between two points
-        max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) + p1[1]
-        sign = np.sign(p2[0] - p1[0])
+        if p1[0] == p2[0]:
+            max_col_idx = (idxs[0] - p1[0]) * idxs.shape[1]
+            sign = np.sign(p2[1] - p1[1])
+        else:
+            max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) + p1[1]
+            sign = np.sign(p2[0] - p1[0])
+
         return idxs[1] * sign <= max_col_idx * sign
 
     base_array = np.zeros(shape, dtype=float)  # Initialize your array of zeros
@@ -211,7 +225,7 @@ def create_polygon(shape, vertices):
 
     # Create check array for each edge segment, combine into fill array
     for k in range(vertices.shape[0]):
-        fill = np.all([fill, check(vertices[k], vertices[k - 1], base_array)], axis=0)
+        fill = np.all([fill, check(vertices[k - 1], vertices[k], base_array)], axis=0)
 
     # Set all values inside polygon to one
     base_array[fill] = 1
