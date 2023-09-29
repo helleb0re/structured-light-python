@@ -811,7 +811,7 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
     else:
         for i in range(len(coords1)):
             # Find corresponding point coordinate on second image
-            x, y = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1], LUT)
+            x, y, _ = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1], LUT)
             # If no point found, delete coordinate from grid
             if x == -1 and y == -1:
                 coords_to_delete.append(i)
