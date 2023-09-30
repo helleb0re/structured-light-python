@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import json
 from datetime import datetime
-from typing import List
+from typing import List, Tuple
 
 import cv2
 import numpy as np
@@ -142,7 +142,7 @@ def calibrate_projector(cameras: list[Camera], projector: Projector) -> None:
     plt.show()
 
 
-def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, use_correction: bool) -> list[float]:
+def get_brightness_vs_intensity(cameras : List[Camera], projector: Projector, use_correction: bool) -> Tuple(List[float], List[float]):
     '''
     Get brightness vs intensity dependence by projecting constant intensity
     on screen and capture images with cameras. Brightness is averaged in small
@@ -254,10 +254,10 @@ def get_brightness_vs_intensity(cameras : list[Camera], projector: Projector, us
 
 
 def capture_measurement_images(
-    cameras: list[Camera],
+    cameras: List[Camera],
     projector: Projector, 
     phase_shift_type: PhaseShiftingAlgorithm = PhaseShiftingAlgorithm.n_step
-    ) -> tuple[FPPMeasurement, FPPMeasurement]:
+    ) -> FPPMeasurement:
     '''
     Do fringe projection measurement. Generate pattern, project them via projector and capture images with cameras.
 
@@ -267,8 +267,7 @@ def capture_measurement_images(
         vertical (bool): create vertical patterns, if False create horizontal
 
     Returns:
-        meas1 (FPPMeasurement): measurement for first camera
-        meas2 (FPPMeasurement): measurement for second camera
+        meas (FPPMeasurement): measurement for first and second camera
     '''
     # Create OpenCV GUI windows to show captured images
     cv2.namedWindow('cam1', cv2.WINDOW_NORMAL)
