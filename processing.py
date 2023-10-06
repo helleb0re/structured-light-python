@@ -284,7 +284,7 @@ def point_inside_polygon(x: int, y: int, poly: list[tuple(int, int)] , include_e
     return inside
 
 
-def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2_points: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, float, np.ndarray, np.ndarray]:
+def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2_points: np.ndarray) -> tuple[np.ndarray, float, float, np.ndarray, np.ndarray]:
     '''
     Triangulate two set of 2D point in one set of 3D points
 
@@ -436,15 +436,19 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
             return -1, -1, retval
 
         cor_points = LUT[phase_v_index][phase_h_index]
+        cor_points = np.array(cor_points)
 
         if len(cor_points) > 0 and len(cor_points) < 20:
             # Get mean value for x, y coordinate for points from LUT as second approximation
             x0, y0 = np.mean(cor_points, axis=0)
+            p2_h_d = np.abs(p2_h[cor_points[:,1], cor_points[:,0]] - phase_h)
+            p2_v_d = np.abs(p2_v[cor_points[:,1], cor_points[:,0]] - phase_v)
+            x0, y0 = cor_points[np.argmin(p2_h_d + p2_v_d)]
 
             iter_num = 0
 
             # Iterate thru variants of x and y where fields are near to phase_v and phase_h
-            while iter_num < 1:
+            while iter_num < 5:
                 # Get neareast coords to current values of x and y
                 if int(np.round(x0)) - x0 == 0:
                     x1 = int(x0 - 1)
@@ -788,6 +792,7 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
                 coords1.append((x, y))
 
     coords2 = []
+    errors = []
 
     coords_to_delete = []
 
@@ -811,12 +816,13 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
     else:
         for i in range(len(coords1)):
             # Find corresponding point coordinate on second image
-            x, y, _ = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1], LUT)
+            x, y, err = find_phasogrammetry_corresponding_point(p1_h, p1_v, p2_h, p2_v, coords1[i][0], coords1[i][1], LUT)
             # If no point found, delete coordinate from grid
-            if x == -1 and y == -1:
+            if (x == -1 and y == -1) or (abs(err[0]) > 0.1 or abs(err[1]) > 0.1):
                 coords_to_delete.append(i)
             else:
                 coords2.append((x + ROIx.start, y + ROIy.start))
+                errors.append(err)
 
         # Delete point in grid with no coresponding point on second image
         for index in reversed(coords_to_delete):
@@ -842,8 +848,9 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
     # Convert list to array before returning result from function
     image1_points = np.array(image1_points, dtype=np.float32)
     image2_points = np.array(image2_points, dtype=np.float32)
+    errors = np.array(errors, dtype=np.float32)
 
-    return image1_points, image2_points
+    return image1_points, image2_points, errors
 
 
 def calculate_displacement_field(field1: np.ndarray, field2: np.ndarray, win_size_x: int, win_size_y: int, step_x: int, step_y: int) -> np. ndarray:
