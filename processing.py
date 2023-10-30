@@ -329,7 +329,7 @@ def triangulate_points(calibration_data: dict, image1_points: np.ndarray, image2
     rms1 = np.sqrt(np.sum(reproj_err1)/reproj_points.shape[0])
 
     reproj_err2 = np.sum(np.square(points_2d_2[:,np.newaxis,:] - reproj_points2), axis=2)
-    rms2 = np.sqrt(np.sum(reproj_err2/reproj_points.shape[0]))
+    rms2 = np.sqrt(np.sum(reproj_err2)/reproj_points.shape[0])
 
     reproj_err1 = np.reshape(reproj_err1, (reproj_err1.shape[0]))
     reproj_err2 = np.reshape(reproj_err2, (reproj_err2.shape[0]))
@@ -429,8 +429,8 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
     if LUT is not None:
         # Get value for x, y coordinate from LUT as first approximation
         try:
-            phase_h_index = LUT[-2].index(int(np.round(phase_h)))
-            phase_v_index = LUT[-1].index(int(np.round(phase_v)))
+            phase_h_index = np.argmin(np.abs(LUT[-2] - phase_h))
+            phase_v_index = np.argmin(np.abs(LUT[-1] - phase_v))
         except:
             # phases values not found in LUT
             return -1, -1, retval
@@ -441,6 +441,7 @@ def find_phasogrammetry_corresponding_point(p1_h: np.ndarray, p1_v: np.ndarray, 
         if len(cor_points) > 0 and len(cor_points) < 20:
             # Get mean value for x, y coordinate for points from LUT as second approximation
             x0, y0 = np.mean(cor_points, axis=0)
+            # Get x, y coordinate from point with minimum phase difference as second approximation
             p2_h_d = np.abs(p2_h[cor_points[:,1], cor_points[:,0]] - phase_h)
             p2_v_d = np.abs(p2_v[cor_points[:,1], cor_points[:,0]] - phase_v)
             x0, y0 = cor_points[np.argmin(p2_h_d + p2_v_d)]
@@ -721,8 +722,10 @@ def get_phase_field_LUT(measurement: FPPMeasurement) -> list[list[list]]:
         pv_max = np.max(p_v)
         pv_min = np.min(p_v)
 
-    h_range = np.arange(ph_min, ph_max)
-    v_range = np.arange(pv_min, pv_max)
+    step = 1.0
+
+    h_range = np.arange(ph_min, ph_max, step)
+    v_range = np.arange(pv_min, pv_max, step)
 
     # Determine size of LUT structure
     w, h = h_range.shape[0] + 1, v_range.shape[0] + 1
@@ -734,19 +737,19 @@ def get_phase_field_LUT(measurement: FPPMeasurement) -> list[list[list]]:
     h = p_h.shape[0]
 
     # Phase rounding with an offset so that they start from zero
-    p_h_r = np.round(p_h - ph_min).astype(int).tolist()
-    p_v_r = np.round(p_v - pv_min).astype(int).tolist()
+    p_h_r = np.round((p_h - ph_min) / step).astype(int).tolist()
+    p_v_r = np.round((p_v - pv_min) / step).astype(int).tolist()
 
     # Fill LUT with coordinates of points with horizontal and vertical values as indicies
     for y in range(h):
         for x in range(w):
             if cam2_meas_h.signal_to_noise_mask[y, x] == 1 and cam2_meas_v.signal_to_noise_mask[y, x] == 1:
-                if pv_max - pv_min >= p_v_r[y][x] >= 0 and ph_max - ph_min >= p_h_r[y][x] >= 0:
+                if (pv_max - pv_min) / step >= p_v_r[y][x] >= 0 and (ph_max - ph_min) / step >= p_h_r[y][x] >= 0:
                     LUT[p_v_r[y][x]][p_h_r[y][x]].append([x, y])
 
     # Add range of horizontal and vertical phases at the end of LUT
-    LUT.append(np.round(h_range).astype(int).tolist())
-    LUT.append(np.round(v_range).astype(int).tolist())
+    LUT.append(h_range)
+    LUT.append(v_range)
 
     return LUT
 
@@ -844,6 +847,7 @@ def process_fppmeasurement_with_phasogrammetry(measurement: FPPMeasurement, step
     for index in reversed(indicies_to_delete):
         image1_points.pop(index)
         image2_points.pop(index)
+        errors.pop(index)
 
     # Convert list to array before returning result from function
     image1_points = np.array(image1_points, dtype=np.float32)
